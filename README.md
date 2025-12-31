@@ -1,6 +1,6 @@
 # GasTag
 
-[(GasTagApp.PNG)](https://github.com/daltonch/GasTag/blob/ff082769e666bee69dba1d39c1b543d2a8940064/GasTagApp.PNG)
+(https://github.com/daltonch/GasTag/blob/ff082769e666bee69dba1d39c1b543d2a8940064/GasTagApp.PNG)
 
 A system for displaying and printing gas analyzer data on iPhone via an ESP32-S3 Bluetooth bridge. The gas analyzer outputs serial data over USB, which the ESP32-S3 reads as a USB host and broadcasts over Bluetooth Low Energy (BLE) to the iOS app.
 
