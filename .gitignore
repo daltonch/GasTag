@@ -1,0 +1,12 @@
+# Xcode user-specific files
+*.xcuserstate
+xcuserdata/
+
+# macOS
+.DS_Store
+
+# JetBrains IDEs
+.idea/
+
+# Python version manager
+.python-version
