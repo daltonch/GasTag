@@ -1,13 +1,23 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct GasTagApp: App {
     @ObservedObject private var settings = UserSettings.shared
 
+    var sharedModelContainer: ModelContainer = {
+        let schema = Schema([PrintedLabel.self])
+        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        do {
+            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+        } catch {
+            fatalError("Could not create ModelContainer: \(error)")
+        }
+    }()
+
     init() {
         print("GasTagApp")
         #if targetEnvironment(simulator)
-        // Disable animations in simulator for better performance
         UIView.setAnimationsEnabled(false)
         #endif
     }
@@ -17,6 +27,7 @@ struct GasTagApp: App {
             ContentView()
                 .preferredColorScheme(colorScheme)
         }
+        .modelContainer(sharedModelContainer)
     }
 
     private var colorScheme: ColorScheme? {

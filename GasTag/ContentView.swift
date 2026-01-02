@@ -1,9 +1,26 @@
 import SwiftUI
 
 struct ContentView: View {
+    var body: some View {
+        TabView {
+            MainView()
+                .tabItem {
+                    Label("GasTag", systemImage: "gauge.with.dots.needle.bottom.50percent")
+                }
+
+            HistoryView()
+                .tabItem {
+                    Label("History", systemImage: "clock.arrow.circlepath")
+                }
+        }
+    }
+}
+
+struct MainView: View {
     @StateObject private var bluetoothManager = BluetoothManager()
     @StateObject private var printerManager = PrinterManager.shared
     @StateObject private var settings = UserSettings.shared
+    @Environment(\.modelContext) private var modelContext
 
     @State private var showingSettings = false
     @State private var isPrinting = false
@@ -239,7 +256,6 @@ struct ContentView: View {
 
         isPrinting = true
 
-        // Show brackets when not actively receiving OR when analyzer reports stale data
         let isActivelyReceiving = bluetoothManager.connectionState == .connected && bluetoothManager.isReceivingData
 
         let labelView = LabelView(
@@ -264,7 +280,17 @@ struct ContentView: View {
             let success = await printerManager.printLabel(image: image)
 
             isPrinting = false
-            if !success {
+            if success {
+                // Save to history on successful print
+                HistoryManager.shared.saveLabel(
+                    helium: reading.helium,
+                    oxygen: reading.oxygen,
+                    temperature: reading.temperature,
+                    analyzerTimestamp: reading.timestamp,
+                    labelText: settings.customLabelText,
+                    context: modelContext
+                )
+            } else {
                 printErrorMessage = printerManager.errorMessage ?? "Unknown print error"
                 showPrintError = true
             }

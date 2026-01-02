@@ -1,13 +1,17 @@
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.modelContext) private var modelContext
     @ObservedObject var settings = UserSettings.shared
     @ObservedObject var printerManager: PrinterManager
     @ObservedObject var bluetoothManager: BluetoothManager
 
     @State private var showingPrinterSearch = false
     @State private var showingDeviceSearch = false
+    @State private var showingClearHistoryConfirmation = false
+    @State private var historyCount: Int = 0
 
     var body: some View {
         NavigationView {
@@ -166,6 +170,21 @@ struct SettingsView: View {
                     }
                 }
 
+                // MARK: - Data Management Section
+                Section("Data Management") {
+                    Button(role: .destructive) {
+                        showingClearHistoryConfirmation = true
+                    } label: {
+                        HStack {
+                            Text("Clear Print History")
+                            Spacer()
+                            Text("\(historyCount) labels")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .disabled(historyCount == 0)
+                }
+
                 // MARK: - About Section
                 Section("About") {
                     HStack {
@@ -191,6 +210,18 @@ struct SettingsView: View {
             .sheet(isPresented: $showingDeviceSearch) {
                 DeviceSearchView(bluetoothManager: bluetoothManager)
             }
+            .alert("Clear All History?", isPresented: $showingClearHistoryConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Clear All", role: .destructive) {
+                    HistoryManager.shared.deleteAllLabels(context: modelContext)
+                    updateHistoryCount()
+                }
+            } message: {
+                Text("This will permanently delete all \(historyCount) printed labels. This action cannot be undone.")
+            }
+            .onAppear {
+                updateHistoryCount()
+            }
         }
     }
 
@@ -210,6 +241,11 @@ struct SettingsView: View {
         case .error: return .red
         default: return .orange
         }
+    }
+
+    private func updateHistoryCount() {
+        let descriptor = FetchDescriptor<PrintedLabel>()
+        historyCount = (try? modelContext.fetchCount(descriptor)) ?? 0
     }
 }
 
