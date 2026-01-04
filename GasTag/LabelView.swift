@@ -1,5 +1,13 @@
 import SwiftUI
 
+// MARK: - Mix Label Helper
+
+func formatMixLabel(helium: Double, oxygen: Double) -> String {
+    let he = Int(helium.rounded())
+    let o2 = Int(oxygen.rounded())
+    return "\(he)/\(o2)"
+}
+
 struct LabelView: View {
     let helium: Double
     let heliumIsStale: Bool
@@ -311,5 +319,58 @@ struct LabelView_Previews: PreviewProvider {
         }
         .padding()
         .previewLayout(.sizeThatFits)
+    }
+}
+
+// MARK: - Mix Label View
+
+struct MixLabelView: View {
+    let helium: Double
+    let oxygen: Double
+
+    private var mixText: String {
+        formatMixLabel(helium: helium, oxygen: oxygen)
+    }
+
+    var body: some View {
+        Text(mixText)
+            .font(.system(size: 36, weight: .bold))
+            .foregroundColor(.black)
+            .frame(width: 300, height: 50)
+            .background(Color.white)
+    }
+}
+
+// MARK: - Mix Label Image Rendering
+
+extension MixLabelView {
+    @MainActor
+    func renderToImage() -> UIImage? {
+        let renderer = ImageRenderer(content: self)
+        renderer.scale = 3.0
+        return renderer.uiImage
+    }
+}
+
+// MARK: - Mix Label Preview Card
+
+struct MixLabelPreviewCard: View {
+    let reading: GasReading?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("MIX LABEL")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            if let reading = reading {
+                MixLabelView(helium: reading.helium, oxygen: reading.oxygen)
+                    .padding(8)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.white)
+                    .cornerRadius(8)
+                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+            }
+        }
     }
 }

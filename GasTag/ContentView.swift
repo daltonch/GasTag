@@ -89,6 +89,16 @@ struct MainView: View {
                     )
                     .padding(.horizontal, 4)
 
+                    // Mix Label Preview (conditional)
+                    if settings.printMixLabel {
+                        MixLabelPreviewCard(reading: bluetoothManager.currentReading)
+                            .padding(.horizontal, 4)
+                    }
+
+                    // Mix Label Toggle
+                    Toggle("Print Mix Label", isOn: $settings.printMixLabel)
+                        .padding(.horizontal)
+
                     // Print Button
                     Button(action: printLabel) {
                         HStack {
@@ -279,9 +289,37 @@ struct MainView: View {
 
             let success = await printerManager.printLabel(image: image)
 
-            isPrinting = false
             if success {
+                // Print mix label if enabled
+                if settings.printMixLabel {
+                    let mixLabelView = MixLabelView(
+                        helium: reading.helium,
+                        oxygen: reading.oxygen
+                    )
+
+                    if let mixImage = mixLabelView.renderToImage() {
+                        let mixSuccess = await printerManager.printLabel(image: mixImage)
+                        if !mixSuccess {
+                            // Show warning but don't fail overall - main label printed successfully
+                            isPrinting = false
+                            printErrorMessage = "Main label printed. Mix label failed: \(printerManager.errorMessage ?? "Unknown error")"
+                            showPrintError = true
+                            // Still save to history since main label succeeded
+                            HistoryManager.shared.saveLabel(
+                                helium: reading.helium,
+                                oxygen: reading.oxygen,
+                                temperature: reading.temperature,
+                                analyzerTimestamp: reading.timestamp,
+                                labelText: settings.customLabelText,
+                                context: modelContext
+                            )
+                            return
+                        }
+                    }
+                }
+
                 // Save to history on successful print
+                isPrinting = false
                 HistoryManager.shared.saveLabel(
                     helium: reading.helium,
                     oxygen: reading.oxygen,
@@ -291,6 +329,7 @@ struct MainView: View {
                     context: modelContext
                 )
             } else {
+                isPrinting = false
                 printErrorMessage = printerManager.errorMessage ?? "Unknown print error"
                 showPrintError = true
             }

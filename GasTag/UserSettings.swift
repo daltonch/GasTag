@@ -50,6 +50,9 @@ class UserSettings: ObservableObject {
     @Published var appearanceModeRaw: String = "System" {
         didSet { defaults.set(appearanceModeRaw, forKey: "appearanceMode") }
     }
+    @Published var printMixLabel: Bool = false {
+        didSet { defaults.set(printMixLabel, forKey: "printMixLabel") }
+    }
 
     var appearanceMode: AppearanceMode {
         get { AppearanceMode(rawValue: appearanceModeRaw) ?? .system }
@@ -69,6 +72,7 @@ class UserSettings: ObservableObject {
         ppo2ForMOD = defaults.double(forKey: "ppo2ForMOD")
         if ppo2ForMOD == 0 { ppo2ForMOD = 1.6 }
         appearanceModeRaw = defaults.string(forKey: "appearanceMode") ?? "System"
+        printMixLabel = defaults.bool(forKey: "printMixLabel")
 
         // Load tank names from JSON
         if let data = defaults.data(forKey: "savedTankNames"),
