@@ -190,7 +190,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("1.0")
+                        Text("1.1")
                             .foregroundColor(.secondary)
                     }
                 }
@@ -241,8 +241,9 @@ struct SettingsView: View {
         switch printerManager.connectionState {
         case .connected: return .green
         case .printing: return .blue
+        case .unavailable: return .orange
         case .error: return .red
-        default: return .orange
+        default: return .gray
         }
     }
 

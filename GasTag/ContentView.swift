@@ -64,10 +64,10 @@ struct MainView: View {
                             showingPrinterSearch = true
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: printerManager.connectionState == .connected ? "printer.fill" : "printer")
-                                    .foregroundColor(printerManager.connectionState == .connected ? .green : .gray)
+                                Image(systemName: printerIcon)
+                                    .foregroundColor(printerColor)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(printerManager.connectedPrinterName ?? "No Printer")
+                                    Text(printerStatusText)
                                         .font(.subheadline)
                                         .fontWeight(.medium)
                                         .foregroundColor(.primary)
@@ -129,9 +129,15 @@ struct MainView: View {
                     .disabled((!canPrint && !canShare) || isPrinting)
 
                     if !canPrint && !canShare && bluetoothManager.currentReading != nil {
-                        Text("Connect a printer in Settings to print labels")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        if printerManager.connectionState == .unavailable {
+                            Text("Saved printer not found. Check printer is on.")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        } else {
+                            Text("Connect a printer in Settings to print labels")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
 
                     // Raw Data Log
@@ -200,6 +206,11 @@ struct MainView: View {
             } message: {
                 Text(printErrorMessage)
             }
+            .onAppear {
+                if printerManager.connectionState == .disconnected && settings.hasSavedPrinter {
+                    printerManager.verifyConnection()
+                }
+            }
         }
     }
 
@@ -211,6 +222,35 @@ struct MainView: View {
 
     private var canShare: Bool {
         bluetoothManager.currentReading != nil && bluetoothManager.isSimulating
+    }
+
+    private var printerIcon: String {
+        switch printerManager.connectionState {
+        case .connected: return "printer.fill"
+        case .printing: return "printer.fill"
+        case .unavailable: return "printer"
+        default: return "printer"
+        }
+    }
+
+    private var printerColor: Color {
+        switch printerManager.connectionState {
+        case .connected: return .green
+        case .printing: return .blue
+        case .unavailable: return .orange
+        case .error: return .red
+        default: return .gray
+        }
+    }
+
+    private var printerStatusText: String {
+        if let name = printerManager.connectedPrinterName {
+            if printerManager.connectionState == .unavailable {
+                return "\(name) (Unavailable)"
+            }
+            return name
+        }
+        return "No Printer"
     }
 
     private var bluetoothStatusText: String {

@@ -7,6 +7,7 @@ enum PrinterConnectionState: String {
     case searching = "Searching"
     case connecting = "Connecting"
     case connected = "Connected"
+    case unavailable = "Unavailable"
     case printing = "Printing"
     case error = "Error"
 }
@@ -33,7 +34,7 @@ class PrinterManager: ObservableObject {
         if settings.hasSavedPrinter {
             connectedPrinterName = settings.printerName
             currentSerialNumber = settings.printerIdentifier
-            connectionState = .connected
+            // Don't set .connected - will be verified on app launch
         }
     }
 
@@ -66,7 +67,8 @@ class PrinterManager: ObservableObject {
                 }
 
                 if self.connectionState == .searching {
-                    self.connectionState = self.settings.hasSavedPrinter ? .connected : .disconnected
+                    // If saved printer not found during search, mark as unavailable
+                    self.connectionState = self.settings.hasSavedPrinter ? .unavailable : .disconnected
                 }
             }
         }
@@ -74,7 +76,8 @@ class PrinterManager: ObservableObject {
 
     func stopSearching() {
         if connectionState == .searching {
-            connectionState = settings.hasSavedPrinter ? .connected : .disconnected
+            // If we have a saved printer but stopped searching, mark as unavailable
+            connectionState = settings.hasSavedPrinter ? .unavailable : .disconnected
         }
     }
 
@@ -115,8 +118,9 @@ class PrinterManager: ObservableObject {
 
     func clearError() {
         errorMessage = nil
+        // Re-verify connection instead of assuming connected
         if settings.hasSavedPrinter {
-            connectionState = .connected
+            verifyConnection()
         } else {
             connectionState = .disconnected
         }
@@ -224,5 +228,51 @@ class PrinterManager: ObservableObject {
         currentSerialNumber = settings.printerIdentifier
         connectedPrinterName = settings.printerName
         connectionState = .connected
+    }
+
+    // MARK: - Connection Verification
+
+    func verifyConnection() {
+        guard settings.hasSavedPrinter,
+              let serialNumber = settings.printerIdentifier else {
+            connectionState = .disconnected
+            return
+        }
+
+        // Set searching state while we look for the printer
+        connectionState = .searching
+        connectedPrinterName = settings.printerName
+        currentSerialNumber = serialNumber
+
+        // Scan for the saved printer
+        BRLMPrinterSearcher.startBluetoothAccessorySearch { [weak self] result in
+            Task { @MainActor in
+                guard let self = self else { return }
+
+                // Only update state if we're still searching (not timed out)
+                guard self.connectionState == .searching else { return }
+
+                // Check if our saved printer is in the results
+                let foundPrinter = result.channels.contains { channel in
+                    channel.channelInfo == serialNumber
+                }
+
+                if foundPrinter {
+                    self.connectionState = .connected
+                } else {
+                    self.connectionState = .unavailable
+                }
+            }
+        }
+
+        // Timeout after 5 seconds if no response
+        Task {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            await MainActor.run {
+                if self.connectionState == .searching {
+                    self.connectionState = .unavailable
+                }
+            }
+        }
     }
 }
