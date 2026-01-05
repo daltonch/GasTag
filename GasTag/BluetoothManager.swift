@@ -38,6 +38,7 @@ class BluetoothManager: NSObject, ObservableObject {
     @Published var connectedDeviceName: String?
     @Published var signalStrength: Int = 0
     @Published var isReceivingData: Bool = false
+    @Published var isSimulating: Bool = false
 
     // Track when data was last received (for "Receiving" status)
     private var lastDataReceivedTime: Date?
@@ -47,6 +48,13 @@ class BluetoothManager: NSObject, ObservableObject {
     // Track last known values for when analyzer shows ***.*
     private var lastKnownHelium: Double = 0.0
     private var lastKnownOxygen: Double = 0.0
+
+    // Simulation properties
+    private var simulationTimer: Timer?
+    private var simulatedHelium: Double = 50.0
+    private var simulatedOxygen: Double = 21.0
+    private var simulatedTemperature: Double = 72.0
+    private var simulatedPressure: Double = 29.92
 
     // MARK: - BLE Constants
     static let serviceUUID = CBUUID(string: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890")
@@ -115,6 +123,12 @@ class BluetoothManager: NSObject, ObservableObject {
     }
 
     func disconnect() {
+        // ADD THIS CHECK AT THE BEGINNING
+        if isSimulating {
+            stopSimulation()
+            return
+        }
+
         shouldReconnect = false
         rssiTimer?.invalidate()
         rssiTimer = nil
@@ -132,6 +146,97 @@ class BluetoothManager: NSObject, ObservableObject {
         signalStrength = 0
         connectionState = .disconnected
         addRawLine("[Info] Disconnected")
+    }
+
+    // MARK: - Simulation Methods
+
+    func startSimulation() {
+        // Stop any existing connection
+        if connectedPeripheral != nil {
+            disconnect()
+        }
+        stopScanning()
+
+        // Initialize random base values within realistic ranges
+        simulatedHelium = Double.random(in: 40...80)
+        // Ensure He + O2 <= 100 (leave room for nitrogen)
+        let maxOxygen = min(50.0, 100.0 - simulatedHelium - 10.0)  // Keep at least 10% N2
+        simulatedOxygen = Double.random(in: 10...maxOxygen)
+        simulatedTemperature = Double.random(in: 68...78)
+        simulatedPressure = Double.random(in: 29.5...30.5)
+
+        // Set state
+        isSimulating = true
+        connectionState = .connected
+        connectedDeviceName = "GasTag Simulator"
+        addRawLine("[Info] Simulation mode started")
+
+        // Generate initial reading
+        generateSimulatedReading()
+
+        // Start timer for varying data
+        simulationTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
+            self?.generateSimulatedReading()
+        }
+
+        // Start receiving status timer
+        startReceivingStatusTimer()
+    }
+
+    func stopSimulation() {
+        simulationTimer?.invalidate()
+        simulationTimer = nil
+        stopReceivingStatusTimer()
+        isSimulating = false
+        connectionState = .disconnected
+        connectedDeviceName = nil
+        currentReading = nil
+        lastDataReceivedTime = nil
+        addRawLine("[Info] Simulation mode stopped")
+    }
+
+    private func generateSimulatedReading() {
+        // Drift values slightly
+        simulatedHelium += Double.random(in: -0.3...0.3)
+        simulatedHelium = max(40, min(80, simulatedHelium))
+
+        // Adjust O2 to stay within constraint (He + O2 <= 100, keep at least 10% N2)
+        let maxOxygen = min(50.0, 100.0 - simulatedHelium - 10.0)
+        simulatedOxygen += Double.random(in: -0.3...0.3)
+        simulatedOxygen = max(10, min(maxOxygen, simulatedOxygen))
+
+        simulatedTemperature += Double.random(in: -0.2...0.2)
+        simulatedTemperature = max(68, min(78, simulatedTemperature))
+
+        simulatedPressure += Double.random(in: -0.05...0.05)
+        simulatedPressure = max(29.5, min(30.5, simulatedPressure))
+
+        // Format timestamp like real analyzer
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy/MM/dd HH:mm:ss"
+        let timestamp = dateFormatter.string(from: Date())
+
+        // Create simulated reading line (matches real analyzer format)
+        let line = String(format: "He  %5.1f %%  O2  %4.1f %%  Ti  %4.1f ~F   %5.2f inHg   %@",
+                          simulatedHelium, simulatedOxygen, simulatedTemperature, simulatedPressure, timestamp)
+
+        addRawLine("[Sim] \(line)")
+
+        let reading = GasReading(
+            helium: simulatedHelium,
+            heliumIsStale: false,
+            oxygen: simulatedOxygen,
+            oxygenIsStale: false,
+            temperature: simulatedTemperature,
+            pressure: simulatedPressure,
+            timestamp: timestamp
+        )
+
+        markDataReceived()
+
+        DispatchQueue.main.async {
+            self.currentReading = reading
+        }
     }
 
     // MARK: - Private Methods

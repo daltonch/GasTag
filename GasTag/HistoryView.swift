@@ -134,6 +134,16 @@ struct HistoryView: View {
             HStack {
                 Text("He: \(String(format: "%.1f", label.helium))%")
                 Text("O₂: \(String(format: "%.1f", label.oxygen))%")
+                if label.isSimulated {
+                    Text("SIM")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.purple)
+                        .cornerRadius(4)
+                }
                 Spacer()
                 Text(formatDate(label.timestamp))
                     .font(.caption)
