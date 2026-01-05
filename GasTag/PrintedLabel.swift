@@ -10,8 +10,9 @@ class PrintedLabel {
     var timestamp: Date
     var analyzerTimestamp: String
     var labelText: String
+    var isSimulated: Bool = false
 
-    init(helium: Double, oxygen: Double, temperature: Double, analyzerTimestamp: String, labelText: String) {
+    init(helium: Double, oxygen: Double, temperature: Double, analyzerTimestamp: String, labelText: String, isSimulated: Bool = false) {
         self.id = UUID()
         self.helium = helium
         self.oxygen = oxygen
@@ -19,5 +20,6 @@ class PrintedLabel {
         self.timestamp = Date()
         self.analyzerTimestamp = analyzerTimestamp
         self.labelText = labelText
+        self.isSimulated = isSimulated
     }
 }

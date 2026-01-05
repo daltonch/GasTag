@@ -226,6 +226,9 @@ struct SettingsView: View {
     }
 
     private var deviceStatusColor: Color {
+        if bluetoothManager.isSimulating {
+            return .purple
+        }
         switch bluetoothManager.connectionState {
         case .connected: return .green
         case .scanning, .connecting: return .orange
@@ -357,49 +360,75 @@ struct DeviceSearchView: View {
     var body: some View {
         NavigationView {
             List {
-                if bluetoothManager.connectionState == .scanning {
-                    HStack {
-                        ProgressView()
-                            .padding(.trailing, 8)
-                        Text("Searching for GasTag Bridge...")
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                ForEach(bluetoothManager.discoveredDevices) { device in
+                // MARK: - Demo Section
+                Section("Demo") {
                     Button {
-                        bluetoothManager.connect(to: device)
+                        bluetoothManager.startSimulation()
                         dismiss()
                     } label: {
                         HStack {
-                            Image(systemName: "wave.3.right")
-                                .foregroundColor(.blue)
-                            Text(device.name)
-                                .foregroundColor(.primary)
+                            Image(systemName: "waveform.path")
+                                .foregroundColor(.purple)
+                            VStack(alignment: .leading) {
+                                Text("GasTag Simulator")
+                                    .foregroundColor(.primary)
+                                Text("Demo Mode")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                             Spacer()
-                            Text("\(device.rssi) dBm")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
                             Image(systemName: "chevron.right")
                                 .foregroundColor(.secondary)
                         }
                     }
                 }
 
-                if bluetoothManager.discoveredDevices.isEmpty && bluetoothManager.connectionState != .scanning {
-                    VStack(spacing: 12) {
-                        Image(systemName: "antenna.radiowaves.left.and.right")
-                            .font(.largeTitle)
-                            .foregroundColor(.secondary)
-                        Text("No devices found")
-                            .foregroundColor(.secondary)
-                        Text("Make sure your GasTag Bridge is powered on and nearby.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
+                // MARK: - Available Devices Section
+                Section("Available Devices") {
+                    if bluetoothManager.connectionState == .scanning {
+                        HStack {
+                            ProgressView()
+                                .padding(.trailing, 8)
+                            Text("Searching for GasTag Bridge...")
+                                .foregroundColor(.secondary)
+                        }
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 40)
+
+                    ForEach(bluetoothManager.discoveredDevices) { device in
+                        Button {
+                            bluetoothManager.connect(to: device)
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Image(systemName: "wave.3.right")
+                                    .foregroundColor(.blue)
+                                Text(device.name)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Text("\(device.rssi) dBm")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+
+                    if bluetoothManager.discoveredDevices.isEmpty && bluetoothManager.connectionState != .scanning {
+                        VStack(spacing: 12) {
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                                .font(.largeTitle)
+                                .foregroundColor(.secondary)
+                            Text("No devices found")
+                                .foregroundColor(.secondary)
+                            Text("Make sure your GasTag Bridge is powered on and nearby.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                    }
                 }
             }
             .navigationTitle("Select Device")

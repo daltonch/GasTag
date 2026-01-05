@@ -15,6 +15,7 @@ class HistoryManager: ObservableObject {
         temperature: Double,
         analyzerTimestamp: String,
         labelText: String,
+        isSimulated: Bool = false,
         context: ModelContext
     ) {
         let label = PrintedLabel(
@@ -22,7 +23,8 @@ class HistoryManager: ObservableObject {
             oxygen: oxygen,
             temperature: temperature,
             analyzerTimestamp: analyzerTimestamp,
-            labelText: labelText
+            labelText: labelText,
+            isSimulated: isSimulated
         )
         context.insert(label)
         try? context.save()
@@ -73,11 +75,12 @@ class HistoryManager: ObservableObject {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
 
-        var csv = "Label Text,Helium %,Oxygen %,Temperature (F),Analyzer Time,Print Time\n"
+        var csv = "Label Text,Helium %,Oxygen %,Temperature (F),Analyzer Time,Print Time,Simulated\n"
 
         for label in labels {
             let labelText = escapeCSV(label.labelText)
-            let line = "\(labelText),\(String(format: "%.1f", label.helium)),\(String(format: "%.1f", label.oxygen)),\(String(format: "%.1f", label.temperature)),\(escapeCSV(label.analyzerTimestamp)),\(dateFormatter.string(from: label.timestamp))"
+            let simulated = label.isSimulated ? "Yes" : "No"
+            let line = "\(labelText),\(String(format: "%.1f", label.helium)),\(String(format: "%.1f", label.oxygen)),\(String(format: "%.1f", label.temperature)),\(escapeCSV(label.analyzerTimestamp)),\(dateFormatter.string(from: label.timestamp)),\(simulated)"
             csv += line + "\n"
         }
 

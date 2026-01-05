@@ -63,6 +63,18 @@ struct HistoryDetailView: View {
                     Text(label.labelText)
                 }
             }
+
+            if label.isSimulated {
+                Section {
+                    HStack {
+                        Image(systemName: "waveform.path")
+                            .foregroundColor(.purple)
+                        Text("This label was created in simulation mode")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
         }
         .navigationTitle("Label Details")
         .navigationBarTitleDisplayMode(.inline)

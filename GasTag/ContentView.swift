@@ -28,6 +28,8 @@ struct MainView: View {
     @State private var printErrorMessage = ""
     @State private var showingDeviceSearch = false
     @State private var showingPrinterSearch = false
+    @State private var showingShareSheet = false
+    @State private var shareImage: UIImage?
 
     var body: some View {
         NavigationView {
@@ -99,28 +101,34 @@ struct MainView: View {
                     Toggle("Print Mix Label", isOn: $settings.printMixLabel)
                         .padding(.horizontal)
 
-                    // Print Button
-                    Button(action: printLabel) {
+                    // Print/Share Button
+                    Button(action: {
+                        if bluetoothManager.isSimulating {
+                            shareLabel()
+                        } else {
+                            printLabel()
+                        }
+                    }) {
                         HStack {
                             if isPrinting {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .padding(.trailing, 4)
                             } else {
-                                Image(systemName: "printer.fill")
+                                Image(systemName: bluetoothManager.isSimulating ? "square.and.arrow.up" : "printer.fill")
                             }
-                            Text(isPrinting ? "Printing..." : "Print Label")
+                            Text(isPrinting ? "Printing..." : (bluetoothManager.isSimulating ? "Share Label" : "Print Label"))
                                 .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(canPrint ? Color.blue : Color.gray)
+                        .background((canPrint || canShare) ? Color.blue : Color.gray)
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
-                    .disabled(!canPrint || isPrinting)
+                    .disabled((!canPrint && !canShare) || isPrinting)
 
-                    if !canPrint && bluetoothManager.currentReading != nil {
+                    if !canPrint && !canShare && bluetoothManager.currentReading != nil {
                         Text("Connect a printer in Settings to print labels")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -180,6 +188,11 @@ struct MainView: View {
             .sheet(isPresented: $showingPrinterSearch) {
                 PrinterSearchView(printerManager: printerManager)
             }
+            .sheet(isPresented: $showingShareSheet) {
+                if let image = shareImage {
+                    ShareSheet(items: [image])
+                }
+            }
             .alert("Print Error", isPresented: $showPrintError) {
                 Button("OK", role: .cancel) {
                     printerManager.clearError()
@@ -194,6 +207,10 @@ struct MainView: View {
 
     private var canPrint: Bool {
         bluetoothManager.currentReading != nil && printerManager.connectionState == .connected
+    }
+
+    private var canShare: Bool {
+        bluetoothManager.currentReading != nil && bluetoothManager.isSimulating
     }
 
     private var bluetoothStatusText: String {
@@ -211,6 +228,9 @@ struct MainView: View {
     }
 
     private var bluetoothIcon: String {
+        if bluetoothManager.isSimulating {
+            return "waveform.path"
+        }
         switch bluetoothManager.connectionState {
         case .disconnected:
             return "antenna.radiowaves.left.and.right"
@@ -230,6 +250,9 @@ struct MainView: View {
     }
 
     private var bluetoothColor: Color {
+        if bluetoothManager.isSimulating {
+            return .purple
+        }
         switch bluetoothManager.connectionState {
         case .disconnected:
             return .secondary
@@ -334,6 +357,48 @@ struct MainView: View {
                 showPrintError = true
             }
         }
+    }
+
+    private func shareLabel() {
+        guard let reading = bluetoothManager.currentReading else { return }
+
+        let isActivelyReceiving = bluetoothManager.connectionState == .connected && bluetoothManager.isReceivingData
+
+        let labelView = LabelView(
+            helium: reading.helium,
+            heliumIsStale: reading.heliumIsStale || !isActivelyReceiving,
+            oxygen: reading.oxygen,
+            oxygenIsStale: reading.oxygenIsStale || !isActivelyReceiving,
+            temperature: reading.temperature,
+            timestamp: reading.timestamp,
+            customText: settings.customLabelText,
+            depthUnit: settings.depthUnit
+        )
+
+        guard let mainImage = labelView.renderToImage() else { return }
+
+        var mixImage: UIImage? = nil
+        if settings.printMixLabel {
+            let mixLabelView = MixLabelView(
+                helium: reading.helium,
+                oxygen: reading.oxygen
+            )
+            mixImage = mixLabelView.renderToImage()
+        }
+
+        shareImage = combineLabelsVertically(main: mainImage, mix: mixImage)
+        showingShareSheet = true
+
+        // Save to history as simulated
+        HistoryManager.shared.saveLabel(
+            helium: reading.helium,
+            oxygen: reading.oxygen,
+            temperature: reading.temperature,
+            analyzerTimestamp: reading.timestamp,
+            labelText: settings.customLabelText,
+            isSimulated: true,
+            context: modelContext
+        )
     }
 }
 

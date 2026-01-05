@@ -374,3 +374,31 @@ struct MixLabelPreviewCard: View {
         }
     }
 }
+
+// MARK: - Image Combining Helper
+
+@MainActor
+func combineLabelsVertically(main: UIImage, mix: UIImage?, gap: CGFloat = 20) -> UIImage {
+    guard let mixImage = mix else {
+        return main
+    }
+
+    let totalWidth = max(main.size.width, mixImage.size.width)
+    let totalHeight = main.size.height + gap + mixImage.size.height
+
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: totalWidth, height: totalHeight))
+
+    return renderer.image { context in
+        // Draw white background
+        UIColor.white.setFill()
+        context.fill(CGRect(x: 0, y: 0, width: totalWidth, height: totalHeight))
+
+        // Draw main label centered horizontally
+        let mainX = (totalWidth - main.size.width) / 2
+        main.draw(at: CGPoint(x: mainX, y: 0))
+
+        // Draw mix label centered horizontally below main
+        let mixX = (totalWidth - mixImage.size.width) / 2
+        mixImage.draw(at: CGPoint(x: mixX, y: main.size.height + gap))
+    }
+}
