@@ -5,6 +5,7 @@ struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PrintedLabel.timestamp, order: .reverse) private var labels: [PrintedLabel]
     @ObservedObject private var settings = UserSettings.shared
+    @StateObject private var printerManager = PrinterManager.shared
 
     @State private var isSelecting = false
     @State private var selectedLabels: Set<UUID> = []
@@ -12,6 +13,12 @@ struct HistoryView: View {
     @State private var labelToDelete: PrintedLabel?
     @State private var showingExportSheet = false
     @State private var exportURL: URL?
+    @State private var showPrintError = false
+    @State private var printErrorMessage = ""
+
+    private func canReprint(_ label: PrintedLabel) -> Bool {
+        !label.isSimulated && printerManager.connectionState == .connected
+    }
 
     var body: some View {
         NavigationView {
@@ -73,6 +80,13 @@ struct HistoryView: View {
                     ShareSheet(items: [url])
                 }
             }
+            .alert("Print Error", isPresented: $showPrintError) {
+                Button("OK", role: .cancel) {
+                    printerManager.clearError()
+                }
+            } message: {
+                Text(printErrorMessage)
+            }
         }
     }
 
@@ -98,6 +112,16 @@ struct HistoryView: View {
                 } else {
                     NavigationLink(destination: HistoryDetailView(label: label)) {
                         labelRow(for: label)
+                    }
+                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                        if canReprint(label) {
+                            Button {
+                                reprintLabel(label)
+                            } label: {
+                                Label("Re-print", systemImage: "printer.fill")
+                            }
+                            .tint(.blue)
+                        }
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
@@ -186,6 +210,52 @@ struct HistoryView: View {
         if let url = HistoryManager.shared.createCSVFile(selectedItems) {
             exportURL = url
             showingExportSheet = true
+        }
+    }
+
+    private func reprintLabel(_ label: PrintedLabel) {
+        let labelView = LabelView(
+            helium: label.helium,
+            heliumIsStale: false,  // Historical data - not showing stale indicators since data was valid when originally printed
+            oxygen: label.oxygen,
+            oxygenIsStale: false,  // Historical data - not showing stale indicators since data was valid when originally printed
+            temperature: label.temperature,
+            timestamp: label.analyzerTimestamp,
+            customText: label.labelText,
+            depthUnit: settings.depthUnit
+        )
+
+        Task { @MainActor in
+            guard let image = labelView.renderToImage() else {
+                printErrorMessage = "Failed to render label image"
+                showPrintError = true
+                return
+            }
+
+            let success = await printerManager.printLabel(image: image)
+
+            if success {
+                // Print mix label if enabled
+                if settings.printMixLabel {
+                    let mixLabelView = MixLabelView(
+                        helium: label.helium,
+                        oxygen: label.oxygen
+                    )
+
+                    if let mixImage = mixLabelView.renderToImage() {
+                        let mixSuccess = await printerManager.printLabel(image: mixImage)
+                        if !mixSuccess {
+                            // Show warning but don't fail overall
+                            printErrorMessage = "Main label printed. Mix label failed: \(printerManager.errorMessage ?? "Unknown error")"
+                            showPrintError = true
+                            return
+                        }
+                    }
+                }
+            } else {
+                printErrorMessage = printerManager.errorMessage ?? "Unknown print error"
+                showPrintError = true
+            }
         }
     }
 }

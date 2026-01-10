@@ -101,34 +101,46 @@ struct MainView: View {
                     Toggle("Print Mix Label", isOn: $settings.printMixLabel)
                         .padding(.horizontal)
 
-                    // Print/Share Button
-                    Button(action: {
-                        if bluetoothManager.isSimulating {
-                            shareLabel()
-                        } else {
-                            printLabel()
-                        }
-                    }) {
-                        HStack {
-                            if isPrinting {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .padding(.trailing, 4)
-                            } else {
-                                Image(systemName: bluetoothManager.isSimulating ? "square.and.arrow.up" : "printer.fill")
+                    // Save Label and Print Label Buttons
+                    HStack(spacing: 12) {
+                        // Save Label Button
+                        Button(action: saveLabel) {
+                            HStack {
+                                Image(systemName: "square.and.arrow.up")
+                                Text("Save Label")
+                                    .fontWeight(.semibold)
                             }
-                            Text(isPrinting ? "Printing..." : (bluetoothManager.isSimulating ? "Share Label" : "Print Label"))
-                                .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(canSave ? Color.blue : Color.gray)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background((canPrint || canShare) ? Color.blue : Color.gray)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                    }
-                    .disabled((!canPrint && !canShare) || isPrinting)
+                        .disabled(!canSave)
 
-                    if !canPrint && !canShare && bluetoothManager.currentReading != nil {
+                        // Print Label Button
+                        Button(action: printLabel) {
+                            HStack {
+                                if isPrinting {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .padding(.trailing, 4)
+                                } else {
+                                    Image(systemName: "printer.fill")
+                                }
+                                Text(isPrinting ? "Printing..." : "Print Label")
+                                    .fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(canPrint ? Color.blue : Color.gray)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
+                        .disabled(!canPrint || isPrinting)
+                    }
+
+                    if !canPrint && !canSave && bluetoothManager.currentReading != nil {
                         if printerManager.connectionState == .unavailable {
                             Text("Saved printer not found. Check printer is on.")
                                 .font(.caption)
@@ -220,8 +232,8 @@ struct MainView: View {
         bluetoothManager.currentReading != nil && printerManager.connectionState == .connected
     }
 
-    private var canShare: Bool {
-        bluetoothManager.currentReading != nil && bluetoothManager.isSimulating
+    private var canSave: Bool {
+        bluetoothManager.currentReading != nil && (bluetoothManager.connectionState == .connected || bluetoothManager.isSimulating)
     }
 
     private var printerIcon: String {
@@ -374,6 +386,7 @@ struct MainView: View {
                                 temperature: reading.temperature,
                                 analyzerTimestamp: reading.timestamp,
                                 labelText: settings.customLabelText,
+                                isSimulated: bluetoothManager.isSimulating,
                                 context: modelContext
                             )
                             return
@@ -389,6 +402,7 @@ struct MainView: View {
                     temperature: reading.temperature,
                     analyzerTimestamp: reading.timestamp,
                     labelText: settings.customLabelText,
+                    isSimulated: bluetoothManager.isSimulating,
                     context: modelContext
                 )
             } else {
@@ -399,7 +413,7 @@ struct MainView: View {
         }
     }
 
-    private func shareLabel() {
+    private func saveLabel() {
         guard let reading = bluetoothManager.currentReading else { return }
 
         let isActivelyReceiving = bluetoothManager.connectionState == .connected && bluetoothManager.isReceivingData
@@ -429,14 +443,14 @@ struct MainView: View {
         shareImage = combineLabelsVertically(main: mainImage, mix: mixImage)
         showingShareSheet = true
 
-        // Save to history as simulated
+        // Save to history
         HistoryManager.shared.saveLabel(
             helium: reading.helium,
             oxygen: reading.oxygen,
             temperature: reading.temperature,
             analyzerTimestamp: reading.timestamp,
             labelText: settings.customLabelText,
-            isSimulated: true,
+            isSimulated: bluetoothManager.isSimulating,
             context: modelContext
         )
     }

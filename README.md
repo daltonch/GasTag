@@ -19,7 +19,7 @@ Before setting up GasTag, you'll need the following hardware:
 - **Recommended:** YD-ESP32-S3 (VCC-GND Studio clone)
   - Available from [Amazon - ESP32-S3 Development Board Type-C](https://amzn.to/490tVlt)
   - Features dual USB-C ports
-  - Identifiable by: 4 LEDs in a row (RGB, Power, TX, RX) and "USB-OTG" solder pads on back
+  - Identifiable by: 4 LEDs in a row (RGB, Power, TX, RX)
 
 ### Cables & Adapters
 - USB-C to USB-A OTG adapter (e.g., [JSAUX adapter](https://amzn.to/4q7WVho))
@@ -44,7 +44,7 @@ The ESP32 firmware creates a USB host to read data from the gas analyzer and a B
 
 ### Hardware Setup
 
-#### YD-ESP32-S3 with USB-OTG Jumper (Recommended)
+#### YD-ESP32-S3 Setup (Recommended)
 
 1. Connect the **UART USB-C port** to power (iPhone or USB power source)
 2. Connect the **OTG USB-C port** via adapter chain:
