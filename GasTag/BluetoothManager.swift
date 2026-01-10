@@ -39,6 +39,7 @@ class BluetoothManager: NSObject, ObservableObject {
     @Published var signalStrength: Int = 0
     @Published var isReceivingData: Bool = false
     @Published var isSimulating: Bool = false
+    @Published var firmwareVersion: String?
 
     // Track when data was last received (for "Receiving" status)
     private var lastDataReceivedTime: Date?
@@ -59,14 +60,22 @@ class BluetoothManager: NSObject, ObservableObject {
     // MARK: - BLE Constants
     static let serviceUUID = CBUUID(string: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890")
     static let characteristicUUID = CBUUID(string: "A1B2C3D5-E5F6-7890-ABCD-EF1234567890")
+    static let versionCharacteristicUUID = CBUUID(string: "A1B2C3D6-E5F6-7890-ABCD-EF1234567890")
+    static let otaControlCharacteristicUUID = CBUUID(string: "A1B2C3D7-E5F6-7890-ABCD-EF1234567890")
 
     // MARK: - Private Properties
     private var centralManager: CBCentralManager!
     private var connectedPeripheral: CBPeripheral?
     private var gasReadingCharacteristic: CBCharacteristic?
+    private var versionCharacteristic: CBCharacteristic?
+    private var otaControlCharacteristic: CBCharacteristic?
     private var rssiTimer: Timer?
     private var shouldReconnect = false
     private var lastConnectedPeripheralIdentifier: UUID?
+
+    // Continuations for async BLE operations
+    private var versionReadContinuation: CheckedContinuation<String?, Never>?
+    private var otaModeContinuation: CheckedContinuation<Bool, Never>?
 
     // MARK: - Initialization
     override init() {
@@ -142,7 +151,10 @@ class BluetoothManager: NSObject, ObservableObject {
 
         connectedPeripheral = nil
         gasReadingCharacteristic = nil
+        versionCharacteristic = nil
+        otaControlCharacteristic = nil
         connectedDeviceName = nil
+        firmwareVersion = nil
         signalStrength = 0
         connectionState = .disconnected
         addRawLine("[Info] Disconnected")
@@ -236,6 +248,62 @@ class BluetoothManager: NSObject, ObservableObject {
 
         DispatchQueue.main.async {
             self.currentReading = reading
+        }
+    }
+
+    // MARK: - OTA Update Methods
+
+    /// Read the firmware version from the connected device
+    /// - Returns: The firmware version string, or nil if not available
+    func readFirmwareVersion() async -> String? {
+        guard connectionState == .connected,
+              let peripheral = connectedPeripheral,
+              let characteristic = versionCharacteristic else {
+            addRawLine("[OTA] Cannot read version: not connected or characteristic not found")
+            return nil
+        }
+
+        return await withCheckedContinuation { continuation in
+            versionReadContinuation = continuation
+            peripheral.readValue(for: characteristic)
+
+            // Timeout after 5 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+                if let cont = self?.versionReadContinuation {
+                    self?.versionReadContinuation = nil
+                    self?.addRawLine("[OTA] Version read timeout")
+                    cont.resume(returning: nil)
+                }
+            }
+        }
+    }
+
+    /// Send command to ESP32 to enter OTA update mode
+    /// The device will stop BLE and start WiFi AP for firmware upload
+    /// - Returns: true if command was sent successfully
+    func enterOTAMode() async -> Bool {
+        guard connectionState == .connected,
+              let peripheral = connectedPeripheral,
+              let characteristic = otaControlCharacteristic else {
+            addRawLine("[OTA] Cannot enter OTA mode: not connected or characteristic not found")
+            return false
+        }
+
+        // Command 0x01 = enter OTA mode
+        let command = Data([0x01])
+
+        return await withCheckedContinuation { continuation in
+            otaModeContinuation = continuation
+            peripheral.writeValue(command, for: characteristic, type: .withResponse)
+
+            // Timeout after 5 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+                if let cont = self?.otaModeContinuation {
+                    self?.otaModeContinuation = nil
+                    self?.addRawLine("[OTA] OTA mode command timeout")
+                    cont.resume(returning: false)
+                }
+            }
         }
     }
 
@@ -445,7 +513,10 @@ extension BluetoothManager: CBCentralManagerDelegate {
         lastDataReceivedTime = nil
         connectedPeripheral = nil
         gasReadingCharacteristic = nil
+        versionCharacteristic = nil
+        otaControlCharacteristic = nil
         connectedDeviceName = nil
+        firmwareVersion = nil
         signalStrength = 0
 
         if let error = error {
@@ -472,7 +543,11 @@ extension BluetoothManager: CBPeripheralDelegate {
         for service in services {
             if service.uuid == BluetoothManager.serviceUUID {
                 addRawLine("[Info] Found GasTag service")
-                peripheral.discoverCharacteristics([BluetoothManager.characteristicUUID], for: service)
+                peripheral.discoverCharacteristics([
+                    BluetoothManager.characteristicUUID,
+                    BluetoothManager.versionCharacteristicUUID,
+                    BluetoothManager.otaControlCharacteristicUUID
+                ], for: service)
             }
         }
     }
@@ -500,6 +575,17 @@ extension BluetoothManager: CBPeripheralDelegate {
                 if characteristic.properties.contains(.read) {
                     peripheral.readValue(for: characteristic)
                 }
+            } else if characteristic.uuid == BluetoothManager.versionCharacteristicUUID {
+                addRawLine("[Info] Found firmware version characteristic")
+                versionCharacteristic = characteristic
+
+                // Auto-read firmware version on connect
+                if characteristic.properties.contains(.read) {
+                    peripheral.readValue(for: characteristic)
+                }
+            } else if characteristic.uuid == BluetoothManager.otaControlCharacteristicUUID {
+                addRawLine("[Info] Found OTA control characteristic")
+                otaControlCharacteristic = characteristic
             }
         }
     }
@@ -507,17 +593,34 @@ extension BluetoothManager: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         if let error = error {
             addRawLine("[Error] Read failed: \(error.localizedDescription)")
+            // Resume version continuation with nil on error
+            if characteristic.uuid == BluetoothManager.versionCharacteristicUUID,
+               let continuation = versionReadContinuation {
+                versionReadContinuation = nil
+                continuation.resume(returning: nil)
+            }
             return
         }
 
-        guard characteristic.uuid == BluetoothManager.characteristicUUID,
-              let data = characteristic.value,
+        guard let data = characteristic.value,
               let message = String(data: data, encoding: .utf8) else {
             return
         }
 
-        addRawLine(message)
-        parseReading(message)
+        if characteristic.uuid == BluetoothManager.characteristicUUID {
+            addRawLine(message)
+            parseReading(message)
+        } else if characteristic.uuid == BluetoothManager.versionCharacteristicUUID {
+            addRawLine("[OTA] Firmware version: \(message)")
+            DispatchQueue.main.async {
+                self.firmwareVersion = message
+            }
+            // Resume continuation if waiting
+            if let continuation = versionReadContinuation {
+                versionReadContinuation = nil
+                continuation.resume(returning: message)
+            }
+        }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
@@ -537,6 +640,22 @@ extension BluetoothManager: CBPeripheralDelegate {
         if error == nil {
             DispatchQueue.main.async {
                 self.signalStrength = RSSI.intValue
+            }
+        }
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+        if characteristic.uuid == BluetoothManager.otaControlCharacteristicUUID {
+            if let continuation = otaModeContinuation {
+                otaModeContinuation = nil
+                if let error = error {
+                    addRawLine("[OTA] Failed to send OTA command: \(error.localizedDescription)")
+                    continuation.resume(returning: false)
+                } else {
+                    addRawLine("[OTA] OTA mode command sent successfully")
+                    addRawLine("[OTA] Device will start WiFi AP 'GasTag-Update'")
+                    continuation.resume(returning: true)
+                }
             }
         }
     }

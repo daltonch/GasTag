@@ -1,0 +1,77 @@
+name: ESP32 Firmware Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building firmware version: ${VERSION}"
+
+      - name: Update firmware version in code
+        working-directory: ESP32Firmware
+        run: |
+          sed -i 's/#define FIRMWARE_VERSION ".*"/#define FIRMWARE_VERSION "${{ steps.version.outputs.version }}"/' src/main.c
+          echo "Updated FIRMWARE_VERSION to ${{ steps.version.outputs.version }}"
+          grep FIRMWARE_VERSION src/main.c
+
+      - name: Build firmware
+        working-directory: ESP32Firmware
+        run: pio run --environment esp32s3
+
+      - name: Create release artifacts
+        working-directory: ESP32Firmware
+        run: |
+          mkdir -p release
+          cp .pio/build/esp32s3/firmware.bin release/gastag-firmware-${{ steps.version.outputs.version }}.bin
+          CHECKSUM=$(sha256sum release/*.bin | awk '{print $1}')
+          cat > release/release-meta.json <<EOF
+          {
+            "version": "${{ steps.version.outputs.version }}",
+            "min_ios_app_version": "1.0.0",
+            "checksum_sha256": "${CHECKSUM}",
+            "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          echo "Created release artifacts:"
+          ls -la release/
+          cat release/release-meta.json
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: GasTag Firmware v${{ steps.version.outputs.version }}
+          body: |
+            ## GasTag Bridge Firmware v${{ steps.version.outputs.version }}
+
+            ### Installation
+            1. Open the GasTag iOS app
+            2. Go to Settings > Firmware > Check for Updates
+            3. Follow the on-screen instructions to install
+
+            ### Files
+            - `gastag-firmware-${{ steps.version.outputs.version }}.bin` - Firmware binary for ESP32-S3
+            - `release-meta.json` - Release metadata with checksum
+          files: |
+            ESP32Firmware/release/*.bin
+            ESP32Firmware/release/release-meta.json

@@ -11,7 +11,16 @@ struct SettingsView: View {
     @State private var showingPrinterSearch = false
     @State private var showingDeviceSearch = false
     @State private var showingClearHistoryConfirmation = false
+    @State private var showingFirmwareUpdate = false
     @State private var historyCount: Int = 0
+
+    @StateObject private var updateManager: FirmwareUpdateManager
+
+    init(printerManager: PrinterManager, bluetoothManager: BluetoothManager) {
+        self.printerManager = printerManager
+        self.bluetoothManager = bluetoothManager
+        self._updateManager = StateObject(wrappedValue: FirmwareUpdateManager(bluetoothManager: bluetoothManager))
+    }
 
     var body: some View {
         NavigationView {
@@ -59,6 +68,32 @@ struct SettingsView: View {
                         Text("Please enable Bluetooth in Settings")
                             .font(.caption)
                             .foregroundColor(.red)
+                    }
+                }
+
+                // MARK: - Firmware Section
+                Section("Firmware") {
+                    HStack {
+                        Text("Device Version")
+                        Spacer()
+                        Text(bluetoothManager.firmwareVersion ?? "Not connected")
+                            .foregroundColor(.secondary)
+                    }
+
+                    Button {
+                        showingFirmwareUpdate = true
+                    } label: {
+                        HStack {
+                            Text("Check for Updates")
+                            Spacer()
+                            if case .updateAvailable(let version) = updateManager.state {
+                                Text("v\(version) available")
+                                    .foregroundColor(.green)
+                                    .font(.caption)
+                            }
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
 
@@ -209,6 +244,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingDeviceSearch) {
                 DeviceSearchView(bluetoothManager: bluetoothManager)
+            }
+            .sheet(isPresented: $showingFirmwareUpdate) {
+                FirmwareUpdateView(updateManager: updateManager, bluetoothManager: bluetoothManager)
             }
             .alert("Clear All History?", isPresented: $showingClearHistoryConfirmation) {
                 Button("Cancel", role: .cancel) {}

@@ -22,6 +22,10 @@
 		B1000002 /* HistoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000012 /* HistoryManager.swift */; };
 		B1000003 /* HistoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000013 /* HistoryDetailView.swift */; };
 		B1000004 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000014 /* HistoryView.swift */; };
+		C1000001 /* ESP32WiFiManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000011 /* ESP32WiFiManager.swift */; };
+		C1000002 /* FirmwareUpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000012 /* FirmwareUpdateManager.swift */; };
+		C1000003 /* FirmwareUpdateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000013 /* FirmwareUpdateView.swift */; };
+		C1000004 /* GitHubReleaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000014 /* GitHubReleaseService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -55,6 +59,10 @@
 		B1000012 /* HistoryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryManager.swift; sourceTree = "<group>"; };
 		B1000013 /* HistoryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryDetailView.swift; sourceTree = "<group>"; };
 		B1000014 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		C1000011 /* ESP32WiFiManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ESP32WiFiManager.swift; sourceTree = "<group>"; };
+		C1000012 /* FirmwareUpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirmwareUpdateManager.swift; sourceTree = "<group>"; };
+		C1000013 /* FirmwareUpdateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirmwareUpdateView.swift; sourceTree = "<group>"; };
+		C1000014 /* GitHubReleaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubReleaseService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -94,6 +102,10 @@
 				B1000012 /* HistoryManager.swift */,
 				B1000013 /* HistoryDetailView.swift */,
 				B1000014 /* HistoryView.swift */,
+				C1000011 /* ESP32WiFiManager.swift */,
+				C1000012 /* FirmwareUpdateManager.swift */,
+				C1000013 /* FirmwareUpdateView.swift */,
+				C1000014 /* GitHubReleaseService.swift */,
 				A1000014 /* Assets.xcassets */,
 				A1000016 /* Info.plist */,
 			);
@@ -197,6 +209,10 @@
 				B1000002 /* HistoryManager.swift in Sources */,
 				B1000003 /* HistoryDetailView.swift in Sources */,
 				B1000004 /* HistoryView.swift in Sources */,
+				C1000001 /* ESP32WiFiManager.swift in Sources */,
+				C1000002 /* FirmwareUpdateManager.swift in Sources */,
+				C1000003 /* FirmwareUpdateView.swift in Sources */,
+				C1000004 /* GitHubReleaseService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

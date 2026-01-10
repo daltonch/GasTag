@@ -6,6 +6,8 @@
     <string>GasTag uses Bluetooth to connect to the gas analyzer bridge and label printer.</string>
     <key>NSBluetoothPeripheralUsageDescription</key>
     <string>GasTag uses Bluetooth to connect to the gas analyzer bridge and label printer.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>GasTag needs local network access to update firmware on the GasTag Bridge device over WiFi.</string>
     <key>UISupportedExternalAccessoryProtocols</key>
     <array>
         <string>com.brother.ptcbp</string>

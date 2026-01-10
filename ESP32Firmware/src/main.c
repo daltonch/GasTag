@@ -32,7 +32,13 @@
 #include "usb/usb_host.h"
 #include "usb/cdc_acm_host.h"
 
+// OTA Update includes
+#include "ota_update.h"
+
 static const char *TAG = "GasTag";
+
+// ============== FIRMWARE VERSION ==============
+#define FIRMWARE_VERSION "1.0.1"
 
 // ============== USB DEVICE DETECTION ==============
 // No longer restricted to specific VID/PID - accepts any USB CDC device
@@ -42,7 +48,7 @@ static volatile bool device_available = false;
 
 // ============== BLE CONFIGURATION ==============
 #define DEVICE_NAME "GasTag Bridge"
-#define GATTS_NUM_HANDLE     4
+#define GATTS_NUM_HANDLE     10  // Increased for version and OTA characteristics
 
 // Full 128-bit UUIDs for iOS compatibility (little-endian byte order)
 // Service UUID: A1B2C3D4-E5F6-7890-ABCD-EF1234567890
@@ -51,10 +57,22 @@ static uint8_t service_uuid128[16] = {
     0x90, 0x78, 0xF6, 0xE5, 0xD4, 0xC3, 0xB2, 0xA1
 };
 
-// Characteristic UUID: A1B2C3D5-E5F6-7890-ABCD-EF1234567890
+// Characteristic UUID: A1B2C3D5-E5F6-7890-ABCD-EF1234567890 (Gas Data)
 static uint8_t char_uuid128[16] = {
     0x90, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB,
     0x90, 0x78, 0xF6, 0xE5, 0xD5, 0xC3, 0xB2, 0xA1
+};
+
+// Version Characteristic UUID: A1B2C3D6-E5F6-7890-ABCD-EF1234567890 (READ)
+static uint8_t version_char_uuid128[16] = {
+    0x90, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB,
+    0x90, 0x78, 0xF6, 0xE5, 0xD6, 0xC3, 0xB2, 0xA1
+};
+
+// OTA Control Characteristic UUID: A1B2C3D7-E5F6-7890-ABCD-EF1234567890 (WRITE)
+static uint8_t ota_char_uuid128[16] = {
+    0x90, 0x78, 0x56, 0x34, 0x12, 0xEF, 0xCD, 0xAB,
+    0x90, 0x78, 0xF6, 0xE5, 0xD7, 0xC3, 0xB2, 0xA1
 };
 
 // ============== GLOBALS ==============
@@ -62,6 +80,12 @@ static uint16_t gatts_if = ESP_GATT_IF_NONE;
 static uint16_t conn_id = 0;
 static bool device_connected = false;
 static uint16_t char_handle = 0;
+static uint16_t version_char_handle = 0;
+static uint16_t ota_char_handle = 0;
+static uint16_t service_handle = 0;
+
+// OTA mode flag - set when BLE client writes 0x01 to OTA characteristic
+static volatile bool ota_mode_requested = false;
 
 static char last_reading[256] = "";
 static char line_buffer[256] = "";
@@ -369,29 +393,70 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatt_i
             break;
 
         case ESP_GATTS_CREATE_EVT:
-            esp_ble_gatts_start_service(param->create.service_handle);
+            service_handle = param->create.service_handle;
+            esp_ble_gatts_start_service(service_handle);
 
-            // Add characteristic with 128-bit UUID
-            esp_bt_uuid_t char_uuid = {
+            // Add gas data characteristic (READ + NOTIFY)
+            esp_bt_uuid_t gas_char_uuid = {
                 .len = ESP_UUID_LEN_128,
             };
-            memcpy(char_uuid.uuid.uuid128, char_uuid128, 16);
-            esp_ble_gatts_add_char(param->create.service_handle, &char_uuid,
+            memcpy(gas_char_uuid.uuid.uuid128, char_uuid128, 16);
+            esp_ble_gatts_add_char(service_handle, &gas_char_uuid,
                 ESP_GATT_PERM_READ,
                 ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_NOTIFY,
                 &char_val, NULL);
             break;
 
-        case ESP_GATTS_ADD_CHAR_EVT:
-            char_handle = param->add_char.attr_handle;
+        case ESP_GATTS_ADD_CHAR_EVT: {
+            // Determine which characteristic was just added based on UUID
+            uint8_t *added_uuid = param->add_char.char_uuid.uuid.uuid128;
 
-            // Add CCCD descriptor for notifications
-            esp_bt_uuid_t descr_uuid = {
-                .len = ESP_UUID_LEN_16,
-                .uuid = { .uuid16 = ESP_GATT_UUID_CHAR_CLIENT_CONFIG },
+            if (memcmp(added_uuid, char_uuid128, 16) == 0) {
+                // Gas data characteristic added - store handle and add CCCD
+                char_handle = param->add_char.attr_handle;
+                ESP_LOGI(TAG, "Gas data characteristic added, handle=%d", char_handle);
+
+                // Add CCCD descriptor for notifications
+                esp_bt_uuid_t descr_uuid = {
+                    .len = ESP_UUID_LEN_16,
+                    .uuid = { .uuid16 = ESP_GATT_UUID_CHAR_CLIENT_CONFIG },
+                };
+                esp_ble_gatts_add_char_descr(service_handle, &descr_uuid,
+                    ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, NULL, NULL);
+            } else if (memcmp(added_uuid, version_char_uuid128, 16) == 0) {
+                // Version characteristic added
+                version_char_handle = param->add_char.attr_handle;
+                ESP_LOGI(TAG, "Version characteristic added, handle=%d", version_char_handle);
+
+                // Add OTA control characteristic (WRITE only)
+                esp_bt_uuid_t ota_uuid = {
+                    .len = ESP_UUID_LEN_128,
+                };
+                memcpy(ota_uuid.uuid.uuid128, ota_char_uuid128, 16);
+                esp_ble_gatts_add_char(service_handle, &ota_uuid,
+                    ESP_GATT_PERM_WRITE,
+                    ESP_GATT_CHAR_PROP_BIT_WRITE,
+                    NULL, NULL);
+            } else if (memcmp(added_uuid, ota_char_uuid128, 16) == 0) {
+                // OTA control characteristic added
+                ota_char_handle = param->add_char.attr_handle;
+                ESP_LOGI(TAG, "OTA control characteristic added, handle=%d", ota_char_handle);
+                ESP_LOGI(TAG, "All BLE characteristics registered successfully");
+            }
+            break;
+        }
+
+        case ESP_GATTS_ADD_CHAR_DESCR_EVT:
+            // CCCD descriptor added - now add version characteristic
+            ESP_LOGI(TAG, "CCCD descriptor added, adding version characteristic");
+            esp_bt_uuid_t ver_uuid = {
+                .len = ESP_UUID_LEN_128,
             };
-            esp_ble_gatts_add_char_descr(param->add_char.service_handle, &descr_uuid,
-                ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, NULL, NULL);
+            memcpy(ver_uuid.uuid.uuid128, version_char_uuid128, 16);
+            esp_ble_gatts_add_char(service_handle, &ver_uuid,
+                ESP_GATT_PERM_READ,
+                ESP_GATT_CHAR_PROP_BIT_READ,
+                NULL, NULL);
             break;
 
         case ESP_GATTS_CONNECT_EVT:
@@ -415,8 +480,20 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatt_i
             break;
 
         case ESP_GATTS_WRITE_EVT:
-            // Handle CCCD write (notification subscription)
             ESP_LOGI(TAG, "Write event: handle=%d, len=%d", param->write.handle, param->write.len);
+
+            // Check if this is a write to the OTA control characteristic
+            if (param->write.handle == ota_char_handle && param->write.len >= 1) {
+                uint8_t command = param->write.value[0];
+                ESP_LOGI(TAG, "OTA control command received: 0x%02X", command);
+
+                if (command == 0x01) {
+                    // Enter OTA update mode
+                    ESP_LOGI(TAG, "OTA mode requested via BLE");
+                    ota_mode_requested = true;
+                }
+            }
+
             // Send response if needed
             if (param->write.need_rsp) {
                 esp_ble_gatts_send_response(gatt_if, param->write.conn_id,
@@ -430,16 +507,30 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatt_i
             esp_ble_gap_start_advertising(&adv_params);
             break;
 
-        case ESP_GATTS_READ_EVT:
+        case ESP_GATTS_READ_EVT: {
             // Handle read request
             esp_gatt_rsp_t rsp;
             memset(&rsp, 0, sizeof(esp_gatt_rsp_t));
             rsp.attr_value.handle = param->read.handle;
-            rsp.attr_value.len = strlen(last_reading);
-            memcpy(rsp.attr_value.value, last_reading, rsp.attr_value.len);
+
+            if (param->read.handle == version_char_handle) {
+                // Return firmware version
+                rsp.attr_value.len = strlen(FIRMWARE_VERSION);
+                memcpy(rsp.attr_value.value, FIRMWARE_VERSION, rsp.attr_value.len);
+                ESP_LOGI(TAG, "Version read: %s", FIRMWARE_VERSION);
+            } else if (param->read.handle == char_handle) {
+                // Return last gas reading
+                rsp.attr_value.len = strlen(last_reading);
+                memcpy(rsp.attr_value.value, last_reading, rsp.attr_value.len);
+            } else {
+                // Unknown handle - return empty
+                rsp.attr_value.len = 0;
+            }
+
             esp_ble_gatts_send_response(gatt_if, param->read.conn_id,
                 param->read.trans_id, ESP_GATT_OK, &rsp);
             break;
+        }
 
         default:
             break;
@@ -484,6 +575,10 @@ static void setup_ble(void) {
 // ============== MAIN ==============
 void app_main(void) {
     ESP_LOGI(TAG, "\n\nGasTag Bridge Starting...");
+    ESP_LOGI(TAG, "Firmware version: %s", FIRMWARE_VERSION);
+
+    // Initialize OTA module
+    ota_init();
 
     // Setup BLE
     setup_ble();
@@ -492,4 +587,33 @@ void app_main(void) {
     xTaskCreatePinnedToCore(usb_host_task, "usb_host", 8192, NULL, 5, NULL, 1);
 
     ESP_LOGI(TAG, "=== GasTag Bridge Ready ===");
+
+    // Main loop - check for OTA mode request
+    while (1) {
+        if (ota_mode_requested) {
+            ESP_LOGI(TAG, "OTA mode requested, stopping BLE and starting WiFi...");
+
+            // Stop BLE advertising before starting WiFi
+            esp_ble_gap_stop_advertising();
+            esp_bluedroid_disable();
+            esp_bluedroid_deinit();
+            esp_bt_controller_disable();
+            esp_bt_controller_deinit();
+
+            ESP_LOGI(TAG, "BLE stopped, starting OTA update mode...");
+
+            // Start OTA update mode (this blocks until complete or failed)
+            esp_err_t err = ota_start_update_mode();
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "OTA update mode failed: %s", esp_err_to_name(err));
+                // On failure, restart to restore normal operation
+                ESP_LOGI(TAG, "Restarting to restore normal operation...");
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                esp_restart();
+            }
+            // If successful, device will reboot automatically
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(100));  // Check every 100ms
+    }
 }
