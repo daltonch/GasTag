@@ -317,10 +317,15 @@ class FirmwareUpdateManager: ObservableObject {
                 print("[OTA] WiFi join succeeded on attempt \(attempt)")
 
                 // iOS reports WiFi join success before network is fully routed
+                // Give iOS time to complete DHCP and update routing tables
+                // Without this delay, the first reachability check almost always fails
+                print("[OTA] Waiting for network to stabilize...")
+                try? await Task.sleep(nanoseconds: 4_000_000_000)  // 4 seconds after join
+
                 // Check reachability a few times - if it fails, we'll need to re-join WiFi
                 // (iOS sometimes needs two join cycles to properly route traffic)
-                let reachabilityRetries = 2
-                let reachabilityDelay: UInt64 = 3_000_000_000  // 3 seconds between checks
+                let reachabilityRetries = 3
+                let reachabilityDelay: UInt64 = 2_000_000_000  // 2 seconds between checks
 
                 for reachCheck in 1...reachabilityRetries {
                     print("[OTA] Reachability check \(reachCheck)/\(reachabilityRetries)")
