@@ -10,14 +10,15 @@ enum FirmwareUpdateState: Equatable {
     case downloading(progress: Double)
     case downloaded
     case preparingDevice        // Sending BLE command to enter OTA mode
-    case waitingForWiFi         // Waiting for user to join ESP32 WiFi AP
+    case connectingToWiFi       // Automatic WiFi connection in progress
+    case waitingForWiFi         // Waiting for user to join ESP32 WiFi AP (fallback)
     case uploading(progress: Double)
     case complete
     case error(message: String)
 
     var isInProgress: Bool {
         switch self {
-        case .checkingGitHub, .downloading, .preparingDevice, .waitingForWiFi, .uploading:
+        case .checkingGitHub, .downloading, .preparingDevice, .connectingToWiFi, .waitingForWiFi, .uploading:
             return true
         default:
             return false
@@ -30,6 +31,7 @@ enum FirmwareUpdateState: Equatable {
              (.checkingGitHub, .checkingGitHub),
              (.downloaded, .downloaded),
              (.preparingDevice, .preparingDevice),
+             (.connectingToWiFi, .connectingToWiFi),
              (.waitingForWiFi, .waitingForWiFi),
              (.complete, .complete):
             return true
@@ -178,22 +180,42 @@ class FirmwareUpdateManager: ObservableObject {
             return
         }
 
-        do {
-            try await wifiManager.joinESP32WiFi()
+        // Retry logic for WiFi connection
+        // ESP32 may still be starting its WiFi AP
+        let maxAttempts = 3
+        let delayBetweenAttempts: UInt64 = 2_000_000_000  // 2 seconds
 
-            // Give the WiFi connection a moment to stabilize
-            try await Task.sleep(nanoseconds: 2_000_000_000)  // 2 seconds
+        for attempt in 1...maxAttempts {
+            do {
+                try await wifiManager.joinESP32WiFi()
 
-            // Verify we can reach the ESP32
-            let connected = await wifiManager.isConnectedToESP32()
-            if connected {
-                // Proceed to upload
-                await uploadFirmware()
-            } else {
-                state = .error(message: "Connected to WiFi but cannot reach ESP32. Please try again.")
+                // Give the WiFi connection a moment to stabilize
+                try? await Task.sleep(nanoseconds: 1_000_000_000)  // 1 second
+
+                // Verify we can reach the ESP32
+                let connected = await wifiManager.isConnectedToESP32()
+                if connected {
+                    // Proceed to upload
+                    await uploadFirmware()
+                    return
+                } else if attempt < maxAttempts {
+                    // Connected but can't reach device, retry
+                    try? await Task.sleep(nanoseconds: delayBetweenAttempts)
+                    continue
+                } else {
+                    state = .error(message: "Connected to WiFi but cannot reach ESP32. Please try again.")
+                    return
+                }
+            } catch {
+                if attempt < maxAttempts {
+                    // WiFi join failed, retry after delay
+                    try? await Task.sleep(nanoseconds: delayBetweenAttempts)
+                    continue
+                } else {
+                    state = .error(message: "WiFi connection failed after \(maxAttempts) attempts: \(error.localizedDescription)")
+                    return
+                }
             }
-        } catch {
-            state = .error(message: error.localizedDescription)
         }
     }
 
@@ -225,6 +247,34 @@ class FirmwareUpdateManager: ObservableObject {
         }
     }
 
+    /// Upload firmware after user manually joined WiFi
+    /// Skips the programmatic WiFi joining step
+    func uploadFirmwareManual() async {
+        guard state == .waitingForWiFi || state == .connectingToWiFi else {
+            state = .error(message: "Device not ready for upload")
+            return
+        }
+
+        guard downloadedFirmwareUrl != nil else {
+            state = .error(message: "No firmware file to upload")
+            return
+        }
+
+        // Verify we can reach the ESP32
+        let connected = await wifiManager.isConnectedToESP32()
+        if connected {
+            await uploadFirmware()
+        } else {
+            state = .error(message: "Cannot reach ESP32. Make sure you're connected to 'GasTag-Update' WiFi network.")
+        }
+    }
+
+    /// Switch from automatic WiFi connection to manual fallback
+    func switchToManualWiFi() {
+        guard state == .connectingToWiFi else { return }
+        state = .waitingForWiFi
+    }
+
     /// Perform the full update flow: download -> prepare device -> join WiFi -> upload
     func performFullUpdate() async {
         // Download firmware if not already downloaded
@@ -237,11 +287,65 @@ class FirmwareUpdateManager: ObservableObject {
         await prepareDeviceForUpdate()
         guard state == .waitingForWiFi else { return }
 
-        // Wait a moment for ESP32 to start WiFi AP
-        try? await Task.sleep(nanoseconds: 3_000_000_000)  // 3 seconds
+        // Transition to automatic WiFi connection attempt
+        state = .connectingToWiFi
 
-        // Join WiFi and upload
-        await joinESP32WiFi()
+        // Wait for ESP32 to start WiFi AP
+        // ESP32 needs time to: detect flag (~100ms) + shut down BLE (~2s) + start WiFi (~3s)
+        // Give it a solid 5 seconds before first attempt
+        try? await Task.sleep(nanoseconds: 5_000_000_000)  // 5 seconds initial wait
+
+        // Retry WiFi connection with delays
+        let maxAttempts = 5
+        let delayBetweenAttempts: UInt64 = 3_000_000_000  // 3 seconds between retries
+
+        for attempt in 1...maxAttempts {
+            print("[OTA] WiFi connection attempt \(attempt)/\(maxAttempts)")
+
+            // Check if user switched to manual mode
+            if state != .connectingToWiFi {
+                print("[OTA] User switched to manual mode, stopping automatic connection")
+                return
+            }
+
+            // Try to join WiFi
+            do {
+                try await wifiManager.joinESP32WiFi()
+                print("[OTA] WiFi join succeeded on attempt \(attempt)")
+
+                // Give the WiFi connection a moment to stabilize
+                try? await Task.sleep(nanoseconds: 2_000_000_000)  // 2 seconds
+
+                // Verify we can reach the ESP32
+                let connected = await wifiManager.isConnectedToESP32()
+                if connected {
+                    print("[OTA] ESP32 reachable, proceeding to upload")
+                    // Success! Proceed to upload
+                    await uploadFirmware()
+                    return
+                } else {
+                    print("[OTA] WiFi connected but ESP32 not reachable")
+                    if attempt < maxAttempts {
+                        try? await Task.sleep(nanoseconds: delayBetweenAttempts)
+                        continue
+                    } else {
+                        state = .waitingForWiFi
+                        return
+                    }
+                }
+            } catch {
+                print("[OTA] WiFi join failed on attempt \(attempt): \(error.localizedDescription)")
+                // WiFi join failed - wait before retry
+                if attempt < maxAttempts {
+                    try? await Task.sleep(nanoseconds: delayBetweenAttempts)
+                    continue
+                }
+            }
+        }
+
+        // All attempts failed - transition to manual fallback
+        print("[OTA] Automatic WiFi connection failed, transitioning to manual mode")
+        state = .waitingForWiFi
     }
 
     /// Reset state to idle

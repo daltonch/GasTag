@@ -38,7 +38,7 @@
 static const char *TAG = "GasTag";
 
 // ============== FIRMWARE VERSION ==============
-#define FIRMWARE_VERSION "1.0.1"
+#define FIRMWARE_VERSION "1.0.2"
 
 // ============== USB DEVICE DETECTION ==============
 // No longer restricted to specific VID/PID - accepts any USB CDC device
@@ -591,6 +591,9 @@ void app_main(void) {
     // Main loop - check for OTA mode request
     while (1) {
         if (ota_mode_requested) {
+            // Clear flag immediately to prevent re-entry
+            ota_mode_requested = false;
+
             ESP_LOGI(TAG, "OTA mode requested, stopping BLE and starting WiFi...");
 
             // Stop BLE advertising before starting WiFi
@@ -602,7 +605,7 @@ void app_main(void) {
 
             ESP_LOGI(TAG, "BLE stopped, starting OTA update mode...");
 
-            // Start OTA update mode (this blocks until complete or failed)
+            // Start OTA update mode
             esp_err_t err = ota_start_update_mode();
             if (err != ESP_OK) {
                 ESP_LOGE(TAG, "OTA update mode failed: %s", esp_err_to_name(err));
@@ -611,7 +614,35 @@ void app_main(void) {
                 vTaskDelay(pdMS_TO_TICKS(1000));
                 esp_restart();
             }
-            // If successful, device will reboot automatically
+
+            // OTA mode started successfully - wait for update to complete or timeout
+            // The HTTP server handles the actual update. We wait here to prevent
+            // the main loop from doing anything else while OTA is active.
+            ESP_LOGI(TAG, "Waiting for OTA update (timeout: 5 minutes)...");
+            uint32_t ota_start_time = xTaskGetTickCount();
+            const uint32_t OTA_TIMEOUT_TICKS = pdMS_TO_TICKS(5 * 60 * 1000);  // 5 minutes
+
+            while (ota_get_state() != OTA_STATE_SUCCESS &&
+                   ota_get_state() != OTA_STATE_FAILED) {
+                // Check for timeout
+                if ((xTaskGetTickCount() - ota_start_time) > OTA_TIMEOUT_TICKS) {
+                    ESP_LOGW(TAG, "OTA timeout - no update received");
+                    ota_stop_update_mode();
+                    ESP_LOGI(TAG, "Restarting to restore normal operation...");
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                    esp_restart();
+                }
+                vTaskDelay(pdMS_TO_TICKS(1000));  // Check every second
+            }
+
+            // If we get here with SUCCESS state, device will reboot in the HTTP handler
+            // If FAILED, restart to restore normal operation
+            if (ota_get_state() == OTA_STATE_FAILED) {
+                ESP_LOGE(TAG, "OTA update failed");
+                ESP_LOGI(TAG, "Restarting to restore normal operation...");
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                esp_restart();
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(100));  // Check every 100ms

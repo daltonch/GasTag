@@ -88,6 +88,9 @@ struct FirmwareUpdateView: View {
         case .waitingForWiFi:
             wifiInstructionsContent
 
+        case .connectingToWiFi:
+            connectingToWiFiContent
+
         case .uploading(let progress):
             progressContent(title: "Uploading firmware...", progress: progress)
 
@@ -189,9 +192,35 @@ struct FirmwareUpdateView: View {
             .background(Color(.tertiarySystemBackground))
             .cornerRadius(8)
 
-            Text("Tap 'Connect & Upload' to join automatically")
+            Text("Tap 'Connect & Upload' to join automatically,\nor manually join WiFi then tap 'Upload Only'")
                 .font(.caption)
                 .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    private var connectingToWiFiContent: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "wifi")
+                .font(.system(size: 60))
+                .foregroundColor(.orange)
+
+            Text("Connecting to device...")
+                .font(.headline)
+
+            Text("Accept the WiFi prompt when it appears")
+                .foregroundColor(.secondary)
+
+            Spacer()
+                .frame(height: 12)
+
+            Button(action: {
+                updateManager.switchToManualWiFi()
+            }) {
+                Text("Having trouble?")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+            }
         }
     }
 
@@ -258,14 +287,23 @@ struct FirmwareUpdateView: View {
             }
 
         case .waitingForWiFi:
-            Button("Connect & Upload") {
-                Task {
-                    await updateManager.joinESP32WiFi()
+            VStack(spacing: 12) {
+                Button("Connect & Upload") {
+                    Task {
+                        await updateManager.joinESP32WiFi()
+                    }
                 }
-            }
-            .buttonStyle(.borderedProminent)
+                .buttonStyle(.borderedProminent)
 
-        case .downloading, .uploading, .checkingGitHub, .preparingDevice:
+                Button("Upload Only (Manual WiFi)") {
+                    Task {
+                        await updateManager.uploadFirmwareManual()
+                    }
+                }
+                .buttonStyle(.bordered)
+            }
+
+        case .downloading, .uploading, .checkingGitHub, .preparingDevice, .connectingToWiFi:
             Button("Cancel") {
                 updateManager.cancel()
             }
