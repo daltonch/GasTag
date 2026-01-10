@@ -14,26 +14,43 @@ class ESP32WiFiManager {
     /// Join the ESP32's WiFi access point
     /// - Returns: true if connection was initiated successfully
     func joinESP32WiFi() async throws {
+        // Remove any existing configuration for this SSID first
+        NEHotspotConfigurationManager.shared.removeConfiguration(forSSID: ESP32WiFiManager.ssid)
+
+        // Give iOS time to fully process removal before applying new config
+        // 500ms was not enough - iOS may need longer to clean up network state
+        try? await Task.sleep(nanoseconds: 2_000_000_000)  // 2 seconds
+
         let configuration = NEHotspotConfiguration(
             ssid: ESP32WiFiManager.ssid,
             passphrase: ESP32WiFiManager.password,
             isWEP: false
         )
 
-        // Don't persist this network
-        configuration.joinOnce = true
+        // joinOnce = true means iOS won't save this network
+        // But some users report issues with joinOnce, so let's try without it
+        // We'll manually remove the configuration after upload anyway
+        configuration.joinOnce = false
+
+        // Set a reasonable timeout
+        configuration.lifeTimeInDays = NSNumber(value: 1)
 
         return try await withCheckedThrowingContinuation { continuation in
             NEHotspotConfigurationManager.shared.apply(configuration) { error in
                 if let error = error as NSError? {
+                    // Log detailed error info for debugging
+                    print("[WiFi] NEHotspotConfiguration error - domain: \(error.domain), code: \(error.code), description: \(error.localizedDescription)")
+
                     // Check if already connected to this network
                     if error.domain == NEHotspotConfigurationErrorDomain {
                         switch error.code {
                         case NEHotspotConfigurationError.alreadyAssociated.rawValue:
                             // Already connected - this is success
+                            print("[WiFi] Already connected to network - treating as success")
                             continuation.resume()
                             return
                         case NEHotspotConfigurationError.userDenied.rawValue:
+                            print("[WiFi] User denied WiFi connection")
                             continuation.resume(throwing: WiFiError.userDenied)
                             return
                         case NEHotspotConfigurationError.invalid.rawValue:
@@ -48,12 +65,22 @@ class ESP32WiFiManager {
                         case NEHotspotConfigurationError.systemConfiguration.rawValue:
                             continuation.resume(throwing: WiFiError.systemError)
                             return
+                        case 8: // NEHotspotConfigurationError.internal
+                            print("[WiFi] Internal error - this usually means the Hotspot Configuration entitlement is missing or not properly signed")
+                            continuation.resume(throwing: WiFiError.connectionFailed("Internal error - check Hotspot Configuration entitlement"))
+                            return
+                        case 14: // NEHotspotConfigurationError.applicationIsNotInForeground
+                            print("[WiFi] App not in foreground")
+                            continuation.resume(throwing: WiFiError.connectionFailed("App must be in foreground to join WiFi"))
+                            return
                         default:
+                            print("[WiFi] Unhandled error code: \(error.code)")
                             break
                         }
                     }
                     continuation.resume(throwing: WiFiError.connectionFailed(error.localizedDescription))
                 } else {
+                    print("[WiFi] Successfully initiated WiFi connection")
                     continuation.resume()
                 }
             }
@@ -74,14 +101,26 @@ class ESP32WiFiManager {
         }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 3
+        request.timeoutInterval = 5
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+
+        // Use ephemeral session to avoid connection caching issues
+        // iOS sometimes keeps routing through old network after WiFi change
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 5
+        config.timeoutIntervalForResource = 5
+        config.waitsForConnectivity = false
+        config.allowsCellularAccess = false  // Force WiFi-only routing
+        let session = URLSession(configuration: config)
 
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await session.data(for: request)
+            session.invalidateAndCancel()
             if let httpResponse = response as? HTTPURLResponse {
                 return httpResponse.statusCode == 200
             }
         } catch {
+            session.invalidateAndCancel()
             // Connection failed - not connected to ESP32
         }
 

@@ -300,9 +300,24 @@ static esp_err_t start_wifi_ap(void) {
 
     // Initialize TCP/IP stack (only once)
     if (!wifi_initialized) {
-        ESP_ERROR_CHECK(esp_netif_init());
-        ESP_ERROR_CHECK(esp_event_loop_create_default());
+        ESP_LOGI(TAG, "Initializing network stack for OTA...");
+
+        // esp_netif_init may already be called - it's safe to call multiple times
+        esp_err_t ret = esp_netif_init();
+        if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+            ESP_LOGE(TAG, "esp_netif_init failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
+
+        // Event loop may already exist (created by USB host or BLE stack)
+        ret = esp_event_loop_create_default();
+        if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+            ESP_LOGE(TAG, "esp_event_loop_create_default failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
+
         wifi_initialized = true;
+        ESP_LOGI(TAG, "Network stack initialized");
     }
 
     // Create AP network interface
@@ -325,16 +340,18 @@ static esp_err_t start_wifi_ap(void) {
                     ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
 
     // Configure SoftAP
+    // Use WPA_WPA2_PSK for better iOS compatibility with programmatic WiFi joining
     wifi_config_t wifi_config = {
         .ap = {
             .ssid = OTA_WIFI_SSID,
             .ssid_len = strlen(OTA_WIFI_SSID),
-            .channel = OTA_WIFI_CHANNEL,
+            .channel = 6,  // Channel 6 is often more compatible
             .password = OTA_WIFI_PASSWORD,
-            .max_connection = OTA_WIFI_MAX_CONN,
-            .authmode = WIFI_AUTH_WPA2_PSK,
+            .max_connection = 4,  // Allow more connections for reliability
+            .authmode = WIFI_AUTH_WPA_WPA2_PSK,  // More compatible than WPA2 only
             .pmf_cfg = {
                 .required = false,
+                .capable = false,  // Disable PMF completely for compatibility
             },
         },
     };

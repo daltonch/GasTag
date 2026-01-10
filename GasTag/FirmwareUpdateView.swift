@@ -31,6 +31,14 @@ struct FirmwareUpdateView: View {
                     }
                 }
             }
+            .onAppear {
+                // Automatically check for updates when view appears
+                if updateManager.state == .idle {
+                    Task {
+                        await updateManager.checkForUpdates()
+                    }
+                }
+            }
         }
     }
 
@@ -88,6 +96,9 @@ struct FirmwareUpdateView: View {
         case .waitingForWiFi:
             wifiInstructionsContent
 
+        case .connectingToWiFi:
+            connectingToWiFiContent
+
         case .uploading(let progress):
             progressContent(title: "Uploading firmware...", progress: progress)
 
@@ -110,27 +121,75 @@ struct FirmwareUpdateView: View {
     }
 
     private func updateAvailableContent(version: String) -> some View {
-        VStack(spacing: 16) {
-            Image(systemName: "arrow.down.circle")
-                .font(.system(size: 60))
-                .foregroundColor(.blue)
-            Text("Update Available")
-                .font(.headline)
-            Text("Version \(version) is ready to install")
-                .foregroundColor(.secondary)
-
-            if let release = updateManager.latestRelease, let body = release.body, !body.isEmpty {
-                ScrollView {
-                    Text(body)
-                        .font(.caption)
+        ScrollView {
+            VStack(spacing: 20) {
+                // Header
+                VStack(spacing: 8) {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 50))
+                        .foregroundColor(.blue)
+                    Text("Update Available")
+                        .font(.headline)
+                    Text("Version \(version)")
                         .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxHeight: 100)
+
+                // Release notes (if available)
+                if let release = updateManager.latestRelease, let body = release.body, !body.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("What's New")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        Text(body)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding()
+                    .background(Color(.tertiarySystemBackground))
+                    .cornerRadius(8)
+                }
+
+                // What will happen section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("What to Expect")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        updateStepRow(number: "1", text: "Download firmware to your iPhone")
+                        updateStepRow(number: "2", text: "GasTag Bridge enters update mode")
+                        updateStepRow(number: "3", text: "Tap \"Join\" when prompted to connect to GasTag-Update WiFi")
+                        updateStepRow(number: "4", text: "Allow local network access if prompted")
+                        updateStepRow(number: "5", text: "Firmware uploads to device")
+                        updateStepRow(number: "6", text: "Device reboots with new firmware")
+                    }
+
+                    Text("Your iPhone will temporarily disconnect from your current WiFi during the update.")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                        .padding(.top, 4)
+                }
                 .padding()
                 .background(Color(.tertiarySystemBackground))
                 .cornerRadius(8)
             }
+        }
+    }
+
+    private func updateStepRow(number: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(number)
+                .font(.caption)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+                .frame(width: 20, height: 20)
+                .background(Color.blue)
+                .clipShape(Circle())
+            Text(text)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Spacer()
         }
     }
 
@@ -189,9 +248,35 @@ struct FirmwareUpdateView: View {
             .background(Color(.tertiarySystemBackground))
             .cornerRadius(8)
 
-            Text("Tap 'Connect & Upload' to join automatically")
+            Text("Tap 'Connect & Upload' to join automatically,\nor manually join WiFi then tap 'Upload Only'")
                 .font(.caption)
                 .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    private var connectingToWiFiContent: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "wifi")
+                .font(.system(size: 60))
+                .foregroundColor(.orange)
+
+            Text("Connecting to device...")
+                .font(.headline)
+
+            Text("Accept the WiFi prompt when it appears")
+                .foregroundColor(.secondary)
+
+            Spacer()
+                .frame(height: 12)
+
+            Button(action: {
+                updateManager.switchToManualWiFi()
+            }) {
+                Text("Having trouble?")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+            }
         }
     }
 
@@ -258,14 +343,23 @@ struct FirmwareUpdateView: View {
             }
 
         case .waitingForWiFi:
-            Button("Connect & Upload") {
-                Task {
-                    await updateManager.joinESP32WiFi()
+            VStack(spacing: 12) {
+                Button("Connect & Upload") {
+                    Task {
+                        await updateManager.joinESP32WiFi()
+                    }
                 }
-            }
-            .buttonStyle(.borderedProminent)
+                .buttonStyle(.borderedProminent)
 
-        case .downloading, .uploading, .checkingGitHub, .preparingDevice:
+                Button("Upload Only (Manual WiFi)") {
+                    Task {
+                        await updateManager.uploadFirmwareManual()
+                    }
+                }
+                .buttonStyle(.bordered)
+            }
+
+        case .downloading, .uploading, .checkingGitHub, .preparingDevice, .connectingToWiFi:
             Button("Cancel") {
                 updateManager.cancel()
             }
