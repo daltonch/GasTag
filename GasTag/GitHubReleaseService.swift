@@ -79,24 +79,52 @@ class GitHubReleaseService {
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("GasTag-iOS", forHTTPHeaderField: "User-Agent")
 
-        let (data, response) = try await urlSession.data(for: request)
+        // Retry logic for transient server errors (502, 503, 504)
+        let maxRetries = 3
+        var lastError: Error?
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw GitHubError.invalidResponse
+        for attempt in 1...maxRetries {
+            do {
+                let (data, response) = try await urlSession.data(for: request)
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw GitHubError.invalidResponse
+                }
+
+                switch httpResponse.statusCode {
+                case 200:
+                    let decoder = JSONDecoder()
+                    return try decoder.decode(GitHubRelease.self, from: data)
+                case 404:
+                    // No releases found
+                    return nil
+                case 403:
+                    throw GitHubError.rateLimited
+                case 502, 503, 504:
+                    // Transient server errors - retry with backoff
+                    lastError = GitHubError.httpError(statusCode: httpResponse.statusCode)
+                    if attempt < maxRetries {
+                        let delay = UInt64(pow(2.0, Double(attempt))) * 1_000_000_000  // Exponential backoff
+                        try? await Task.sleep(nanoseconds: delay)
+                        continue
+                    }
+                default:
+                    throw GitHubError.httpError(statusCode: httpResponse.statusCode)
+                }
+            } catch let error as GitHubError {
+                throw error  // Don't retry our own errors (except server errors handled above)
+            } catch {
+                // Network errors - retry
+                lastError = error
+                if attempt < maxRetries {
+                    let delay = UInt64(pow(2.0, Double(attempt))) * 1_000_000_000
+                    try? await Task.sleep(nanoseconds: delay)
+                    continue
+                }
+            }
         }
 
-        switch httpResponse.statusCode {
-        case 200:
-            let decoder = JSONDecoder()
-            return try decoder.decode(GitHubRelease.self, from: data)
-        case 404:
-            // No releases found
-            return nil
-        case 403:
-            throw GitHubError.rateLimited
-        default:
-            throw GitHubError.httpError(statusCode: httpResponse.statusCode)
-        }
+        throw lastError ?? GitHubError.invalidResponse
     }
 
     /// Download a firmware asset to a temporary file
