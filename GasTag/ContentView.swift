@@ -218,11 +218,6 @@ struct MainView: View {
             } message: {
                 Text(printErrorMessage)
             }
-            .onAppear {
-                if printerManager.connectionState == .disconnected && settings.hasSavedPrinter {
-                    printerManager.verifyConnection()
-                }
-            }
         }
     }
 
