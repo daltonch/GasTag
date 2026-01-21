@@ -5,6 +5,12 @@ import SwiftUI
 func formatMixLabel(helium: Double, oxygen: Double) -> String {
     let he = Int(helium.rounded())
     let o2 = Int(oxygen.rounded())
+
+    // Display "AIR" for standard air mix (0% He, 21% O2)
+    if he == 0 && o2 == 21 {
+        return "AIR"
+    }
+
     return "\(he)/\(o2)"
 }
 
