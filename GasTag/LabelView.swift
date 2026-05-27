@@ -11,7 +11,7 @@ func formatMixLabel(helium: Double, oxygen: Double) -> String {
         return "AIR"
     }
 
-    return "\(he)/\(o2)"
+    return "\(o2)/\(he)"
 }
 
 struct LabelView: View {
