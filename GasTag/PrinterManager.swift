@@ -89,22 +89,20 @@ class PrinterManager: ObservableObject {
 
         settings.savePrinter(identifier: printer.serialNumber, name: printer.name)
 
-        // Test the connection by opening and closing channel
+        // Prove the connection with a real (retrying, serialized) open/close.
+        let targetSerial = printer.serialNumber
         Task {
-            let channel = BRLMChannel(bluetoothSerialNumber: printer.serialNumber)
-            let result = BRLMPrinterDriverGenerator.open(channel)
-
-            await MainActor.run {
-                if let driver = result.driver {
-                    driver.closeChannel()
-                    self.connectedPrinterName = printer.name
-                    self.connectionState = .connected
-                    self.errorMessage = nil
-                } else {
-                    let errorCode = result.error.code
-                    self.errorMessage = "Connection failed: \(errorCode)"
-                    self.connectionState = .error
-                }
+            let failureMessage = await probeConnection(serialNumber: targetSerial)
+            // The user may have disconnected or picked another printer while
+            // the probe ran; only apply the result if it's still current.
+            guard currentSerialNumber == targetSerial else { return }
+            if failureMessage == nil {
+                connectedPrinterName = printer.name
+                connectionState = .connected
+                errorMessage = nil
+            } else {
+                errorMessage = failureMessage
+                connectionState = .error
             }
         }
     }
@@ -130,50 +128,63 @@ class PrinterManager: ObservableObject {
 
     func printLabel(image: UIImage) async -> Bool {
         guard let serialNumber = currentSerialNumber ?? settings.printerIdentifier else {
-            await MainActor.run {
-                self.errorMessage = "No printer connected"
-            }
+            errorMessage = "No printer connected"
             return false
         }
 
-        await MainActor.run {
-            self.connectionState = .printing
-        }
-
-        let channel = BRLMChannel(bluetoothSerialNumber: serialNumber)
-        let openResult = BRLMPrinterDriverGenerator.open(channel)
-
-        guard let driver = openResult.driver else {
-            await MainActor.run {
-                let errorCode = openResult.error.code
-                switch errorCode {
-                case .openStreamFailure:
-                    self.errorMessage = "Cannot connect to printer. Try: turn printer off/on, or forget & reconnect in Settings"
-                case .timeout:
-                    self.errorMessage = "Printer connection timed out. Make sure printer is on and nearby"
-                default:
-                    self.errorMessage = "Failed to open printer: \(errorCode)"
-                }
-                self.connectionState = .error
-            }
+        guard let cgImage = image.cgImage else {
+            errorMessage = "Failed to get image data"
+            connectionState = .error
             return false
         }
 
-        defer { driver.closeChannel() }
+        connectionState = .printing
 
+        do {
+            // The executor serializes this whole open/print/close cycle and
+            // retries the open, so back-to-back prints (main + mix label) no
+            // longer race a still-tearing-down channel.
+            let outcome = try await PrinterChannelExecutor.shared.withOpenChannel(serialNumber: serialNumber) { driver in
+                Self.performPrint(driver: driver, cgImage: cgImage)
+            }
+
+            switch outcome {
+            case .success:
+                connectionState = .connected
+                errorMessage = nil
+                return true
+            case .settingsFailure:
+                errorMessage = "Failed to create print settings"
+                connectionState = .error
+                return false
+            case .wrongMedia:
+                errorMessage = "Please load a 62mm continuous roll (DK-2205 or DK-2251)"
+                connectionState = .error
+                return false
+            case .printFailed(let description):
+                errorMessage = "Print failed: \(description)"
+                connectionState = .error
+                return false
+            }
+        } catch {
+            errorMessage = Self.openErrorMessage(for: error)
+            connectionState = .error
+            return false
+        }
+    }
+
+    /// Runs on the channel executor's background queue with a live driver.
+    /// Detects the loaded media, validates it, and prints. Pure SDK work, no
+    /// main-actor state.
+    private nonisolated static func performPrint(driver: BRLMPrinterDriver, cgImage: CGImage) -> PrintOutcome {
         // Configure print settings for QL-820NWB
         guard let printSettings = BRLMQLPrintSettings(defaultPrintSettingsWith: .QL_820NWB) else {
-            await MainActor.run {
-                self.errorMessage = "Failed to create print settings"
-                self.connectionState = .error
-            }
-            return false
+            return .settingsFailure
         }
 
         // Auto-detect the loaded media from the printer
-        let statusResult = driver.getPrinterStatus()
         var detectedSize: BRLMQLPrintSettingsLabelSize = .rollW62
-
+        let statusResult = driver.getPrinterStatus()
         if let status = statusResult.status,
            let mediaInfo = status.mediaInfo {
             var succeeded = false
@@ -186,37 +197,18 @@ class PrinterManager: ObservableObject {
         // Validate that a 62mm roll is loaded (label layout is designed for 62mm width)
         let valid62mmSizes: [BRLMQLPrintSettingsLabelSize] = [.rollW62, .rollW62RB]
         guard valid62mmSizes.contains(detectedSize) else {
-            await MainActor.run {
-                self.errorMessage = "Please load a 62mm continuous roll (DK-2205 or DK-2251)"
-                self.connectionState = .error
-            }
-            return false
+            return .wrongMedia
         }
 
         printSettings.labelSize = detectedSize
         printSettings.autoCut = true
 
-        guard let cgImage = image.cgImage else {
-            await MainActor.run {
-                self.errorMessage = "Failed to get image data"
-                self.connectionState = .error
-            }
-            return false
-        }
-
         let printError = driver.printImage(with: cgImage, settings: printSettings)
-
-        await MainActor.run {
-            if printError.code == .noError {
-                self.connectionState = .connected
-                self.errorMessage = nil
-            } else {
-                self.errorMessage = "Print failed: \(printError.errorDescription)"
-                self.connectionState = .error
-            }
+        if printError.code == .noError {
+            return .success
+        } else {
+            return .printFailed(printError.errorDescription)
         }
-
-        return printError.code == .noError
     }
 
     // MARK: - Reconnect
@@ -225,9 +217,8 @@ class PrinterManager: ObservableObject {
         guard settings.hasSavedPrinter,
               currentSerialNumber == nil else { return }
 
-        currentSerialNumber = settings.printerIdentifier
-        connectedPrinterName = settings.printerName
-        connectionState = .connected
+        // Don't assume connected; prove it with a real open/close.
+        verifyConnection()
     }
 
     // MARK: - Connection Verification
@@ -239,40 +230,63 @@ class PrinterManager: ObservableObject {
             return
         }
 
-        // Set searching state while we look for the printer
-        connectionState = .searching
+        connectionState = .connecting
         connectedPrinterName = settings.printerName
         currentSerialNumber = serialNumber
 
-        // Scan for the saved printer
-        BRLMPrinterSearcher.startBluetoothAccessorySearch { [weak self] result in
-            Task { @MainActor in
-                guard let self = self else { return }
-
-                // Only update state if we're still searching (not timed out)
-                guard self.connectionState == .searching else { return }
-
-                // Check if our saved printer is in the results
-                let foundPrinter = result.channels.contains { channel in
-                    channel.channelInfo == serialNumber
-                }
-
-                if foundPrinter {
-                    self.connectionState = .connected
-                } else {
-                    self.connectionState = .unavailable
-                }
-            }
-        }
-
-        // Timeout after 5 seconds if no response
+        // A real open/close is the only honest proof of connectivity. A
+        // Bluetooth scan only tells us the accessory is paired, not that a
+        // channel can actually be opened for printing.
         Task {
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            await MainActor.run {
-                if self.connectionState == .searching {
-                    self.connectionState = .unavailable
-                }
+            let failureMessage = await probeConnection(serialNumber: serialNumber)
+            // Ignore a result that no longer matches the current target.
+            guard currentSerialNumber == serialNumber else { return }
+            if failureMessage == nil {
+                connectionState = .connected
+                errorMessage = nil
+            } else {
+                // Unavailable is an expected condition (printer off / out of
+                // range), not an error, so don't surface the error banner.
+                errorMessage = nil
+                connectionState = .unavailable
             }
         }
     }
+
+    // MARK: - Helpers
+
+    /// Attempts a real (retrying, serialized) open/close. Returns `nil` on
+    /// success, or a user-facing error message on failure. The caller decides
+    /// whether that failure is an error or simply "unavailable", so this does
+    /// not mutate `errorMessage` itself.
+    private func probeConnection(serialNumber: String) async -> String? {
+        do {
+            try await PrinterChannelExecutor.shared.withOpenChannel(serialNumber: serialNumber) { _ in }
+            return nil
+        } catch {
+            return Self.openErrorMessage(for: error)
+        }
+    }
+
+    private static func openErrorMessage(for error: Error) -> String {
+        guard case PrinterChannelError.openFailed(let code) = error else {
+            return "Failed to connect to printer"
+        }
+        switch code {
+        case .openStreamFailure:
+            return "Cannot connect to printer. Try: turn printer off/on, or forget & reconnect in Settings"
+        case .timeout:
+            return "Printer connection timed out. Make sure printer is on and nearby"
+        default:
+            return "Failed to open printer (code \(code.rawValue)). Restart the printer and try again."
+        }
+    }
+}
+
+/// Outcome of a single print attempt performed on the channel executor queue.
+private enum PrintOutcome: Sendable {
+    case success
+    case settingsFailure
+    case wrongMedia
+    case printFailed(String)
 }

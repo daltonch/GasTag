@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		2A169F3A2EF1C77C00DC3F4E /* PrinterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A169F372EF1C77C00DC3F4E /* PrinterManager.swift */; };
+		A1000040 /* PrinterChannelExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000041 /* PrinterChannelExecutor.swift */; };
 		2A169F3B2EF1C77C00DC3F4E /* LabelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A169F362EF1C77C00DC3F4E /* LabelView.swift */; };
 		2A169F3C2EF1C77C00DC3F4E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A169F382EF1C77C00DC3F4E /* SettingsView.swift */; };
 		2A169F3D2EF1C77C00DC3F4E /* UserSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A169F392EF1C77C00DC3F4E /* UserSettings.swift */; };
@@ -46,6 +47,7 @@
 		2A169F342EF1C76300DC3F4E /* BRLMPrinterKit.xcframework */ = {isa = PBXFileReference; expectedSignature = "AppleDeveloperProgram:5HCL85FLGW:Brother Industries, LTD."; lastKnownFileType = wrapper.xcframework; path = BRLMPrinterKit.xcframework; sourceTree = SOURCE_ROOT; };
 		2A169F362EF1C77C00DC3F4E /* LabelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabelView.swift; sourceTree = "<group>"; };
 		2A169F372EF1C77C00DC3F4E /* PrinterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrinterManager.swift; sourceTree = "<group>"; };
+		A1000041 /* PrinterChannelExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrinterChannelExecutor.swift; sourceTree = "<group>"; };
 		2A169F382EF1C77C00DC3F4E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		2A169F392EF1C77C00DC3F4E /* UserSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSettings.swift; sourceTree = "<group>"; };
 		A1000010 /* GasTag.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GasTag.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -95,6 +97,7 @@
 				2A169F342EF1C76300DC3F4E /* BRLMPrinterKit.xcframework */,
 				2A169F362EF1C77C00DC3F4E /* LabelView.swift */,
 				2A169F372EF1C77C00DC3F4E /* PrinterManager.swift */,
+				A1000041 /* PrinterChannelExecutor.swift */,
 				2A169F382EF1C77C00DC3F4E /* SettingsView.swift */,
 				2A169F392EF1C77C00DC3F4E /* UserSettings.swift */,
 				A1000013 /* BluetoothManager.swift */,
@@ -200,6 +203,7 @@
 			files = (
 				A1000001 /* GasTagApp.swift in Sources */,
 				2A169F3A2EF1C77C00DC3F4E /* PrinterManager.swift in Sources */,
+				A1000040 /* PrinterChannelExecutor.swift in Sources */,
 				2A169F3B2EF1C77C00DC3F4E /* LabelView.swift in Sources */,
 				2A169F3C2EF1C77C00DC3F4E /* SettingsView.swift in Sources */,
 				2A169F3D2EF1C77C00DC3F4E /* UserSettings.swift in Sources */,
