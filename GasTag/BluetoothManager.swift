@@ -78,6 +78,15 @@ class BluetoothManager: NSObject, ObservableObject {
     private var versionReadContinuation: CheckedContinuation<String?, Never>?
     private var otaModeContinuation: CheckedContinuation<Bool, Never>?
 
+    // Reconnect backoff state (Issue #4)
+    private var reconnectAttempt: Int = 0
+    private static let reconnectBaseDelay: TimeInterval = 3.0
+    private static let reconnectMaxDelay: TimeInterval = 60.0
+    private static let reconnectMaxAttempts: Int = 10
+
+    // Connect-timeout task handle (Issue #4)
+    private var connectTimeoutTask: Task<Void, Never>?
+
     // MARK: - Initialization
     override init() {
         super.init()
@@ -132,9 +141,12 @@ class BluetoothManager: NSObject, ObservableObject {
         connectionState = .connecting
         lastConnectedPeripheralIdentifier = device.peripheral.identifier
         shouldReconnect = true
+        // Reset backoff counters on a fresh user-initiated connect (Issue #4)
+        reconnectAttempt = 0
         addRawLine("[Info] Connecting to \(device.name)...")
 
         centralManager.connect(device.peripheral, options: nil)
+        startConnectTimeout(for: device.peripheral)
     }
 
     func disconnect() {
@@ -145,6 +157,9 @@ class BluetoothManager: NSObject, ObservableObject {
         }
 
         shouldReconnect = false
+        reconnectAttempt = 0
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = nil
         rssiTimer?.invalidate()
         rssiTimer = nil
         stopReceivingStatusTimer()
@@ -268,7 +283,12 @@ class BluetoothManager: NSObject, ObservableObject {
             return nil
         }
 
-        return await withCheckedContinuation { continuation in
+        return await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+            // Issue #5: resume and discard any previous continuation before overwriting
+            if let existing = versionReadContinuation {
+                versionReadContinuation = nil
+                existing.resume(returning: nil)
+            }
             versionReadContinuation = continuation
             peripheral.readValue(for: characteristic)
 
@@ -298,7 +318,12 @@ class BluetoothManager: NSObject, ObservableObject {
         // Command 0x01 = enter OTA mode
         let command = Data([0x01])
 
-        return await withCheckedContinuation { continuation in
+        let success = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            // Issue #5: resume and discard any previous continuation before overwriting
+            if let existing = otaModeContinuation {
+                otaModeContinuation = nil
+                existing.resume(returning: false)
+            }
             otaModeContinuation = continuation
             peripheral.writeValue(command, for: characteristic, type: .withResponse)
 
@@ -312,6 +337,14 @@ class BluetoothManager: NSObject, ObservableObject {
                 }
             }
         }
+
+        // Issue #3: OTA succeeded — the device will tear down BLE to start its WiFi AP.
+        // Prevent the disconnect handler from scheduling a reconnect.
+        if success {
+            shouldReconnect = false
+            reconnectAttempt = 0
+        }
+        return success
     }
 
     // MARK: - Private Methods
@@ -419,10 +452,25 @@ class BluetoothManager: NSObject, ObservableObject {
     private func scheduleReconnect() {
         guard shouldReconnect, let identifier = lastConnectedPeripheralIdentifier else { return }
 
-        addRawLine("[Info] Will attempt to reconnect...")
+        // Issue #4: enforce max attempt cap
+        guard reconnectAttempt < BluetoothManager.reconnectMaxAttempts else {
+            shouldReconnect = false
+            reconnectAttempt = 0
+            connectionState = .disconnected
+            addRawLine("[Error] Reconnect failed after \(BluetoothManager.reconnectMaxAttempts) attempts — giving up")
+            return
+        }
+
+        // Exponential backoff: base * 2^attempt, capped at max
+        let delay = min(
+            BluetoothManager.reconnectBaseDelay * pow(2.0, Double(reconnectAttempt)),
+            BluetoothManager.reconnectMaxDelay
+        )
+        reconnectAttempt += 1
+        addRawLine("[Info] Will attempt to reconnect (attempt \(reconnectAttempt)/\(BluetoothManager.reconnectMaxAttempts)) in \(Int(delay))s...")
 
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .seconds(delay))
             guard let self = self, self.shouldReconnect else { return }
 
             // Try to retrieve the peripheral by identifier
@@ -431,11 +479,26 @@ class BluetoothManager: NSObject, ObservableObject {
                 self.connectionState = .connecting
                 self.addRawLine("[Info] Reconnecting to \(peripheral.name ?? "device")...")
                 self.centralManager.connect(peripheral, options: nil)
+                self.startConnectTimeout(for: peripheral)
             } else {
                 // Peripheral not found, start scanning
                 self.addRawLine("[Info] Device not found, scanning...")
                 self.startScanning()
             }
+        }
+    }
+
+    /// Cancel a pending connect attempt if the peripheral doesn't connect within the timeout window.
+    private func startConnectTimeout(for peripheral: CBPeripheral) {
+        connectTimeoutTask?.cancel()
+        connectTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard let self = self,
+                  !Task.isCancelled,
+                  self.connectionState == .connecting else { return }
+            self.addRawLine("[Info] Connect timeout — cancelling attempt")
+            self.centralManager.cancelPeripheralConnection(peripheral)
+            // didFailToConnect or didDisconnect will drive the next scheduleReconnect()
         }
     }
 }
@@ -488,6 +551,11 @@ extension BluetoothManager: CBCentralManagerDelegate {
 
     nonisolated func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         MainActor.assumeIsolated {
+            // Issue #4: cancel pending connect-timeout; reset backoff on success
+            connectTimeoutTask?.cancel()
+            connectTimeoutTask = nil
+            reconnectAttempt = 0
+
             addRawLine("[Connected] Connected to \(peripheral.name ?? "device")")
             connectedPeripheral = peripheral
             connectedDeviceName = peripheral.name ?? "GasTag Bridge"
@@ -515,6 +583,10 @@ extension BluetoothManager: CBCentralManagerDelegate {
 
     nonisolated func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         MainActor.assumeIsolated {
+            // Issue #4: cancel any in-flight connect timeout
+            connectTimeoutTask?.cancel()
+            connectTimeoutTask = nil
+
             rssiTimer?.invalidate()
             rssiTimer = nil
             stopReceivingStatusTimer()
@@ -526,6 +598,16 @@ extension BluetoothManager: CBCentralManagerDelegate {
             connectedDeviceName = nil
             firmwareVersion = nil
             signalStrength = 0
+
+            // Issue #5: resume any pending BLE continuations so their awaits don't hang
+            if let cont = versionReadContinuation {
+                versionReadContinuation = nil
+                cont.resume(returning: nil)
+            }
+            if let cont = otaModeContinuation {
+                otaModeContinuation = nil
+                cont.resume(returning: false)
+            }
 
             if let error = error {
                 addRawLine("[Error] Disconnected: \(error.localizedDescription)")
