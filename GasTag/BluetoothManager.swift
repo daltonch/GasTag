@@ -338,12 +338,8 @@ class BluetoothManager: NSObject, ObservableObject {
             }
         }
 
-        // Issue #3: OTA succeeded — the device will tear down BLE to start its WiFi AP.
-        // Prevent the disconnect handler from scheduling a reconnect.
-        if success {
-            shouldReconnect = false
-            reconnectAttempt = 0
-        }
+        // Note: on success, shouldReconnect was already cleared synchronously in
+        // didWriteValueFor (before the device's BLE teardown) to avoid a race.
         return success
     }
 
@@ -498,7 +494,11 @@ class BluetoothManager: NSObject, ObservableObject {
                   self.connectionState == .connecting else { return }
             self.addRawLine("[Info] Connect timeout — cancelling attempt")
             self.centralManager.cancelPeripheralConnection(peripheral)
-            // didFailToConnect or didDisconnect will drive the next scheduleReconnect()
+            // CoreBluetooth does NOT invoke didDisconnectPeripheral or didFailToConnect
+            // for a connection that was never established, so we must drive recovery
+            // ourselves: drop the stuck .connecting state and schedule the next attempt.
+            self.connectionState = .disconnected
+            self.scheduleReconnect()
         }
     }
 }
@@ -750,6 +750,11 @@ extension BluetoothManager: CBPeripheralDelegate {
                         addRawLine("[OTA] Failed to send OTA command: \(error.localizedDescription)")
                         continuation.resume(returning: false)
                     } else {
+                        // Issue #3: OTA succeeded — the device will tear down BLE to start
+                        // its WiFi AP. Suppress reconnect BEFORE resuming (and before the
+                        // disconnect callback can fire) so we never fight the WiFi handoff.
+                        shouldReconnect = false
+                        reconnectAttempt = 0
                         addRawLine("[OTA] OTA mode command sent successfully")
                         addRawLine("[OTA] Device will start WiFi AP 'GasTag-Update'")
                         continuation.resume(returning: true)

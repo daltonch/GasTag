@@ -58,7 +58,16 @@ private func buildModelContainer() -> ModelContainer {
     // ⚠️ DATA LOSS: existing PrintedLabel history will be lost.
     let storeURL = ModelConfiguration().url
     do {
-        try FileManager.default.removeItem(at: storeURL)
+        // SQLite (and thus SwiftData) keeps -wal/-shm sidecar files alongside the
+        // main store; leaving them behind can keep a corrupt store partially
+        // readable and make the rebuild fail. Remove all three.
+        let storeDir = storeURL.deletingLastPathComponent()
+        let storeName = storeURL.lastPathComponent
+        for url in [storeURL,
+                    storeDir.appendingPathComponent(storeName + "-wal"),
+                    storeDir.appendingPathComponent(storeName + "-shm")] {
+            try? FileManager.default.removeItem(at: url)
+        }
         logger.warning("Deleted corrupted SwiftData store at \(storeURL, privacy: .public) — user history cleared.")
         let schema = Schema(versionedSchema: SchemaV1.self)
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
