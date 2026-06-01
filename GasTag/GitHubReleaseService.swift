@@ -163,6 +163,22 @@ class GitHubReleaseService {
 
         try FileManager.default.moveItem(at: tempUrl, to: destinationUrl)
 
+        // Verify the downloaded file is non-empty and matches the expected size
+        // from the GitHub release asset metadata. A truncated download or a 200
+        // error-page response would otherwise be silently flashed to the ESP32.
+        let fileAttributes = try FileManager.default.attributesOfItem(atPath: destinationUrl.path)
+        let downloadedSize = (fileAttributes[.size] as? Int) ?? 0
+
+        guard downloadedSize > 0 else {
+            try? FileManager.default.removeItem(at: destinationUrl)
+            throw GitHubError.firmwareSizeMismatch(expected: asset.size, actual: downloadedSize)
+        }
+
+        guard downloadedSize == asset.size else {
+            try? FileManager.default.removeItem(at: destinationUrl)
+            throw GitHubError.firmwareSizeMismatch(expected: asset.size, actual: downloadedSize)
+        }
+
         return destinationUrl
     }
 
@@ -189,10 +205,19 @@ class GitHubReleaseService {
     // MARK: - Private Helpers
 
     private static func parseVersion(_ version: String) -> [Int] {
-        // Remove 'v' prefix if present
+        // Remove leading 'v' prefix (e.g. "v1.2.3" → "1.2.3")
         let cleaned = version.hasPrefix("v") ? String(version.dropFirst()) : version
 
-        return cleaned.split(separator: ".").compactMap { Int($0) }
+        // Split on "." and parse the *leading integer* of each segment.
+        // This correctly handles pre-release suffixes such as "0-beta" or "1-rc1":
+        //   "1.2.0-beta" → ["1", "2", "0-beta"] → [1, 2, 0]
+        // Segments with no leading digits (malformed) are treated as 0.
+        // Missing trailing segments are handled by the caller (treated as 0).
+        return cleaned.split(separator: ".").map { segment in
+            // Collect only the leading decimal digits of the segment.
+            let digits = segment.prefix(while: { $0.isNumber })
+            return Int(digits) ?? 0
+        }
     }
 }
 
@@ -230,6 +255,7 @@ enum GitHubError: LocalizedError {
     case rateLimited
     case httpError(statusCode: Int)
     case downloadFailed
+    case firmwareSizeMismatch(expected: Int, actual: Int)
 
     var errorDescription: String? {
         switch self {
@@ -243,6 +269,8 @@ enum GitHubError: LocalizedError {
             return "GitHub API error (HTTP \(statusCode))"
         case .downloadFailed:
             return "Failed to download firmware file"
+        case .firmwareSizeMismatch(let expected, let actual):
+            return "Firmware download is corrupt: expected \(expected) bytes but received \(actual) bytes. Refusing to flash."
         }
     }
 }
