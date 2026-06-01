@@ -89,24 +89,36 @@ class PrinterManager: ObservableObject {
 
         settings.savePrinter(identifier: printer.serialNumber, name: printer.name)
 
-        // Test the connection by opening and closing channel
-        Task {
-            let channel = BRLMChannel(bluetoothSerialNumber: printer.serialNumber)
+        // Test the connection by opening and closing channel — run blocking SDK call off main thread
+        let serialNumber = printer.serialNumber
+        let printerName = printer.name
+        Task.detached { [weak self] in
+            let channel = BRLMChannel(bluetoothSerialNumber: serialNumber)
             let result = BRLMPrinterDriverGenerator.open(channel)
 
-            await MainActor.run {
-                if let driver = result.driver {
-                    driver.closeChannel()
-                    self.connectedPrinterName = printer.name
-                    self.connectionState = .connected
-                    self.errorMessage = nil
-                } else {
-                    let errorCode = result.error.code
-                    self.errorMessage = "Connection failed: \(errorCode)"
-                    self.connectionState = .error
-                }
+            // Resolve the connection outcome off-main, then hop back via an optional-chained
+            // @MainActor helper so we never reference the weak `self` var in concurrent code.
+            if let driver = result.driver {
+                driver.closeChannel()
+                await self?.applyConnectSuccess(printerName: printerName)
+            } else {
+                let errorCode = result.error.code
+                await self?.applyConnectFailure(message: "Connection failed: \(errorCode)")
             }
         }
+    }
+
+    @MainActor
+    private func applyConnectSuccess(printerName: String) {
+        connectedPrinterName = printerName
+        connectionState = .connected
+        errorMessage = nil
+    }
+
+    @MainActor
+    private func applyConnectFailure(message: String) {
+        errorMessage = message
+        connectionState = .error
     }
 
     func disconnect() {
@@ -130,93 +142,117 @@ class PrinterManager: ObservableObject {
 
     func printLabel(image: UIImage) async -> Bool {
         guard let serialNumber = currentSerialNumber ?? settings.printerIdentifier else {
-            await MainActor.run {
-                self.errorMessage = "No printer connected"
-            }
+            self.errorMessage = "No printer connected"
             return false
         }
 
-        await MainActor.run {
-            self.connectionState = .printing
+        self.connectionState = .printing
+
+        // Capture the CGImage on the main actor before hopping off-thread.
+        // UIImage.cgImage is safe to access here (we're still on MainActor).
+        guard let cgImage = image.cgImage else {
+            self.errorMessage = "Failed to get image data"
+            self.connectionState = .error
+            return false
         }
 
-        let channel = BRLMChannel(bluetoothSerialNumber: serialNumber)
-        let openResult = BRLMPrinterDriverGenerator.open(channel)
+        // Run all blocking Brother SDK calls on a background thread so the main
+        // thread / UI is never blocked.  Only plain value types cross the boundary.
+        enum PrintResult {
+            case success
+            case openStreamFailure
+            case timeout
+            case openError(String)
+            case settingsError
+            case wrongMedia
+            case printError(String)
+        }
 
-        guard let driver = openResult.driver else {
-            await MainActor.run {
+        let result: PrintResult = await Task.detached(priority: .userInitiated) {
+            let channel = BRLMChannel(bluetoothSerialNumber: serialNumber)
+            let openResult = BRLMPrinterDriverGenerator.open(channel)
+
+            guard let driver = openResult.driver else {
                 let errorCode = openResult.error.code
                 switch errorCode {
                 case .openStreamFailure:
-                    self.errorMessage = "Cannot connect to printer. Try: turn printer off/on, or forget & reconnect in Settings"
+                    return PrintResult.openStreamFailure
                 case .timeout:
-                    self.errorMessage = "Printer connection timed out. Make sure printer is on and nearby"
+                    return PrintResult.timeout
                 default:
-                    self.errorMessage = "Failed to open printer: \(errorCode)"
+                    return PrintResult.openError("\(errorCode)")
                 }
-                self.connectionState = .error
             }
-            return false
-        }
 
-        defer { driver.closeChannel() }
+            defer { driver.closeChannel() }
 
-        // Configure print settings for QL-820NWB
-        guard let printSettings = BRLMQLPrintSettings(defaultPrintSettingsWith: .QL_820NWB) else {
-            await MainActor.run {
-                self.errorMessage = "Failed to create print settings"
-                self.connectionState = .error
+            // Configure print settings for QL-820NWB
+            guard let printSettings = BRLMQLPrintSettings(defaultPrintSettingsWith: .QL_820NWB) else {
+                return PrintResult.settingsError
             }
-            return false
-        }
 
-        // Auto-detect the loaded media from the printer
-        let statusResult = driver.getPrinterStatus()
-        var detectedSize: BRLMQLPrintSettingsLabelSize = .rollW62
+            // Auto-detect the loaded media from the printer
+            let statusResult = driver.getPrinterStatus()
+            var detectedSize: BRLMQLPrintSettingsLabelSize = .rollW62
 
-        if let status = statusResult.status,
-           let mediaInfo = status.mediaInfo {
-            var succeeded = false
-            let size = mediaInfo.getQLLabelSize(&succeeded)
-            if succeeded {
-                detectedSize = size
+            if let status = statusResult.status,
+               let mediaInfo = status.mediaInfo {
+                var succeeded = false
+                let size = mediaInfo.getQLLabelSize(&succeeded)
+                if succeeded {
+                    detectedSize = size
+                }
             }
-        }
 
-        // Validate that a 62mm roll is loaded (label layout is designed for 62mm width)
-        let valid62mmSizes: [BRLMQLPrintSettingsLabelSize] = [.rollW62, .rollW62RB]
-        guard valid62mmSizes.contains(detectedSize) else {
-            await MainActor.run {
-                self.errorMessage = "Please load a 62mm continuous roll (DK-2205 or DK-2251)"
-                self.connectionState = .error
+            // Validate that a 62mm roll is loaded (label layout is designed for 62mm width)
+            let valid62mmSizes: [BRLMQLPrintSettingsLabelSize] = [.rollW62, .rollW62RB]
+            guard valid62mmSizes.contains(detectedSize) else {
+                return PrintResult.wrongMedia
             }
-            return false
-        }
 
-        printSettings.labelSize = detectedSize
-        printSettings.autoCut = true
+            printSettings.labelSize = detectedSize
+            printSettings.autoCut = true
 
-        guard let cgImage = image.cgImage else {
-            await MainActor.run {
-                self.errorMessage = "Failed to get image data"
-                self.connectionState = .error
-            }
-            return false
-        }
+            let printError = driver.printImage(with: cgImage, settings: printSettings)
 
-        let printError = driver.printImage(with: cgImage, settings: printSettings)
-
-        await MainActor.run {
             if printError.code == .noError {
-                self.connectionState = .connected
-                self.errorMessage = nil
+                return PrintResult.success
             } else {
-                self.errorMessage = "Print failed: \(printError.errorDescription)"
-                self.connectionState = .error
+                return PrintResult.printError(printError.errorDescription)
             }
-        }
+        }.value
 
-        return printError.code == .noError
+        // Back on MainActor — update @Published state based on the result.
+        switch result {
+        case .success:
+            self.connectionState = .connected
+            self.errorMessage = nil
+            return true
+        case .openStreamFailure:
+            self.errorMessage = "Cannot connect to printer. Try: turn printer off/on, or forget & reconnect in Settings"
+            self.connectionState = .error
+            return false
+        case .timeout:
+            self.errorMessage = "Printer connection timed out. Make sure printer is on and nearby"
+            self.connectionState = .error
+            return false
+        case .openError(let code):
+            self.errorMessage = "Failed to open printer: \(code)"
+            self.connectionState = .error
+            return false
+        case .settingsError:
+            self.errorMessage = "Failed to create print settings"
+            self.connectionState = .error
+            return false
+        case .wrongMedia:
+            self.errorMessage = "Please load a 62mm continuous roll (DK-2205 or DK-2251)"
+            self.connectionState = .error
+            return false
+        case .printError(let desc):
+            self.errorMessage = "Print failed: \(desc)"
+            self.connectionState = .error
+            return false
+        }
     }
 
     // MARK: - Reconnect
