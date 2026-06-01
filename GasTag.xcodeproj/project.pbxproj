@@ -13,6 +13,8 @@
 		2A169F3D2EF1C77C00DC3F4E /* UserSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A169F392EF1C77C00DC3F4E /* UserSettings.swift */; };
 		2A169F3E2EF1C7B400DC3F4E /* BRLMPrinterKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2A169F342EF1C76300DC3F4E /* BRLMPrinterKit.xcframework */; };
 		2A169F3F2EF1C7B400DC3F4E /* BRLMPrinterKit.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2A169F342EF1C76300DC3F4E /* BRLMPrinterKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		3655242F5A6377D27E4DDD09 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB1B3037212F958E06C11184 /* Foundation.framework */; };
+		48909F2B92B32F42FA383532 /* SemVerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30206239CFBF7A5A0D93899 /* SemVerTests.swift */; };
 		A1000001 /* GasTagApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011 /* GasTagApp.swift */; };
 		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012 /* ContentView.swift */; };
 		A1000003 /* BluetoothManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013 /* BluetoothManager.swift */; };
@@ -22,11 +24,22 @@
 		B1000002 /* HistoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000012 /* HistoryManager.swift */; };
 		B1000003 /* HistoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000013 /* HistoryDetailView.swift */; };
 		B1000004 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000014 /* HistoryView.swift */; };
+		B7C94D3736172587A10629E7 /* FirmwareSizeValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ACCB46F71FBA26F018994D /* FirmwareSizeValidationTests.swift */; };
 		C1000001 /* ESP32WiFiManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000011 /* ESP32WiFiManager.swift */; };
 		C1000002 /* FirmwareUpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000012 /* FirmwareUpdateManager.swift */; };
 		C1000003 /* FirmwareUpdateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000013 /* FirmwareUpdateView.swift */; };
 		C1000004 /* GitHubReleaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000014 /* GitHubReleaseService.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D6CC86E9A298C851246C1734 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1000008 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A100000F;
+			remoteInfo = GasTag;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		2A169F402EF1C7B400DC3F4E /* Embed Frameworks */ = {
@@ -55,6 +68,8 @@
 		A1000014 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1000015 /* ExternalAccessory.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ExternalAccessory.framework; path = System/Library/Frameworks/ExternalAccessory.framework; sourceTree = SDKROOT; };
 		A1000016 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A30206239CFBF7A5A0D93899 /* SemVerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SemVerTests.swift; sourceTree = "<group>"; };
+		A3ACCB46F71FBA26F018994D /* FirmwareSizeValidationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FirmwareSizeValidationTests.swift; sourceTree = "<group>"; };
 		B1000011 /* PrintedLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintedLabel.swift; sourceTree = "<group>"; };
 		B1000012 /* HistoryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryManager.swift; sourceTree = "<group>"; };
 		B1000013 /* HistoryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryDetailView.swift; sourceTree = "<group>"; };
@@ -63,6 +78,8 @@
 		C1000012 /* FirmwareUpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirmwareUpdateManager.swift; sourceTree = "<group>"; };
 		C1000013 /* FirmwareUpdateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirmwareUpdateView.swift; sourceTree = "<group>"; };
 		C1000014 /* GitHubReleaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubReleaseService.swift; sourceTree = "<group>"; };
+		ED4DC9443DB02440CBC99F33 /* GasTagTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GasTagTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FB1B3037212F958E06C11184 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,15 +92,42 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F0C557099662BB95316A2CAF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3655242F5A6377D27E4DDD09 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		19A58545F44A2B35E0C46F1F /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				FB1B3037212F958E06C11184 /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		6613E8440139D697925D5FF5 /* GasTagTests */ = {
+			isa = PBXGroup;
+			children = (
+				A30206239CFBF7A5A0D93899 /* SemVerTests.swift */,
+				A3ACCB46F71FBA26F018994D /* FirmwareSizeValidationTests.swift */,
+			);
+			name = GasTagTests;
+			path = GasTagTests;
+			sourceTree = SOURCE_ROOT;
+		};
 		A1000007 = {
 			isa = PBXGroup;
 			children = (
 				A1000020 /* GasTag */,
 				A1000021 /* Products */,
 				A1000022 /* Frameworks */,
+				6613E8440139D697925D5FF5 /* GasTagTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -116,6 +160,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000010 /* GasTag.app */,
+				ED4DC9443DB02440CBC99F33 /* GasTagTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -124,6 +169,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000015 /* ExternalAccessory.framework */,
+				19A58545F44A2B35E0C46F1F /* iOS */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -131,6 +177,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		6316735741E2A8A7C1A8A173 /* GasTagTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E599509B877D67416EA9715C /* Build configuration list for PBXNativeTarget "GasTagTests" */;
+			buildPhases = (
+				3C37E88B96C35BE6B9217E69 /* Sources */,
+				F0C557099662BB95316A2CAF /* Frameworks */,
+				7B5242334BF86D8C93A3FCA0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B8F38E2596C7076A6AB165C3 /* PBXTargetDependency */,
+			);
+			name = GasTagTests;
+			productName = GasTagTests;
+			productReference = ED4DC9443DB02440CBC99F33 /* GasTagTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		A100000F /* GasTag */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A1000030 /* Build configuration list for PBXNativeTarget "GasTag" */;
@@ -178,11 +242,19 @@
 			projectRoot = "";
 			targets = (
 				A100000F /* GasTag */,
+				6316735741E2A8A7C1A8A173 /* GasTagTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		7B5242334BF86D8C93A3FCA0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A100000E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -194,6 +266,15 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		3C37E88B96C35BE6B9217E69 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				48909F2B92B32F42FA383532 /* SemVerTests.swift in Sources */,
+				B7C94D3736172587A10629E7 /* FirmwareSizeValidationTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A100000C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -218,7 +299,53 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		B8F38E2596C7076A6AB165C3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = GasTag;
+			target = A100000F /* GasTag */;
+			targetProxy = D6CC86E9A298C851246C1734 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		4670D1E65EBFFD5FF4F0BFB0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = KQA3778FCP;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.daltonch.GasTagTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GasTag.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GasTag";
+			};
+			name = Debug;
+		};
+		5B4B809D7446FFF462D53DB8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = KQA3778FCP;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.daltonch.GasTagTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GasTag.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GasTag";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		A1000031 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -429,6 +556,15 @@
 			buildConfigurations = (
 				A1000033 /* Debug */,
 				A1000034 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E599509B877D67416EA9715C /* Build configuration list for PBXNativeTarget "GasTagTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5B4B809D7446FFF462D53DB8 /* Release */,
+				4670D1E65EBFFD5FF4F0BFB0 /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
