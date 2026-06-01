@@ -575,6 +575,10 @@ extension BluetoothManager: CBCentralManagerDelegate {
 
     nonisolated func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         MainActor.assumeIsolated {
+            // Issue #4: cancel any in-flight connect timeout — this attempt already failed.
+            connectTimeoutTask?.cancel()
+            connectTimeoutTask = nil
+
             addRawLine("[Error] Failed to connect: \(error?.localizedDescription ?? "Unknown error")")
             connectionState = .disconnected
             scheduleReconnect()
