@@ -169,17 +169,24 @@ class GitHubReleaseService {
         let fileAttributes = try FileManager.default.attributesOfItem(atPath: destinationUrl.path)
         let downloadedSize = (fileAttributes[.size] as? Int) ?? 0
 
-        guard downloadedSize > 0 else {
+        do {
+            try GitHubReleaseService.validateDownloadedSize(downloadedSize, expected: asset.size)
+        } catch {
             try? FileManager.default.removeItem(at: destinationUrl)
-            throw GitHubError.firmwareSizeMismatch(expected: asset.size, actual: downloadedSize)
-        }
-
-        guard downloadedSize == asset.size else {
-            try? FileManager.default.removeItem(at: destinationUrl)
-            throw GitHubError.firmwareSizeMismatch(expected: asset.size, actual: downloadedSize)
+            throw error
         }
 
         return destinationUrl
+    }
+
+    /// Pure validation of a downloaded firmware file's size against the expected
+    /// asset size. Throws `GitHubError.firmwareSizeMismatch` if the file is empty
+    /// or its byte count does not exactly match `expected`. Extracted as a pure
+    /// function so the integrity check is unit-testable without touching the disk.
+    static func validateDownloadedSize(_ downloadedSize: Int, expected: Int) throws {
+        guard downloadedSize > 0, downloadedSize == expected else {
+            throw GitHubError.firmwareSizeMismatch(expected: expected, actual: downloadedSize)
+        }
     }
 
     /// Compare two semantic version strings
