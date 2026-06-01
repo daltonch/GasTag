@@ -143,6 +143,9 @@ class GitHubReleaseService {
         // Use delegate-based download for progress tracking
         let delegate = DownloadProgressDelegate(totalSize: asset.size, progressHandler: progressHandler)
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        // URLSession strongly retains its delegate until invalidated. Ensure the session,
+        // its delegate, and the captured progressHandler are released on every exit path.
+        defer { session.finishTasksAndInvalidate() }
 
         let (tempUrl, response) = try await session.download(for: request)
 

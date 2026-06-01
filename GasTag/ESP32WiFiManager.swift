@@ -152,6 +152,9 @@ class ESP32WiFiManager {
         // Use upload task with delegate for progress
         let delegate = UploadProgressDelegate(totalSize: firmwareData.count, progressHandler: progressHandler)
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        // URLSession strongly retains its delegate until invalidated. Ensure the session,
+        // its delegate, and the captured progressHandler are released on every exit path.
+        defer { session.finishTasksAndInvalidate() }
 
         let (data, response) = try await session.upload(for: request, from: firmwareData)
 
