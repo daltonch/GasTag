@@ -35,6 +35,22 @@ struct MainView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
+                    // Header - title and settings share one row to save vertical space
+                    HStack {
+                        Text("GasTag")
+                            .font(.largeTitle.bold())
+                        Spacer()
+                        Button {
+                            showingSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .font(.title2)
+                                .frame(width: 44, height: 44)
+                                .background(Color(.secondarySystemBackground), in: Circle())
+                        }
+                        .accessibilityLabel("Settings")
+                    }
+
                     // Status Card
                     HStack(spacing: 16) {
                         // Gas Analyzer status (tappable)
@@ -187,16 +203,7 @@ struct MainView: View {
                 }
                 .padding()
             }
-            .navigationTitle("GasTag")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showingSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingSettings) {
                 SettingsView(printerManager: printerManager, bluetoothManager: bluetoothManager)
             }
