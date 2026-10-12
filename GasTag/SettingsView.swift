@@ -167,6 +167,18 @@ struct SettingsView: View {
                         }
                         .pickerStyle(.segmented)
                     }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Water")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Picker("Water", selection: $settings.waterTypeRaw) {
+                            ForEach(WaterType.allCases, id: \.self) { water in
+                                Text(water.displayName).tag(water.rawValue)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
                 }
 
                 // MARK: - MOD Settings Section
@@ -194,6 +206,37 @@ struct SettingsView: View {
                     Text("MOD Calculation")
                 } footer: {
                     Text("Standard recreational limit is 1.4. Technical diving commonly uses 1.6. Values above 1.6 are for advanced applications only.")
+                }
+
+                // MARK: - Gas Density Section
+                Section {
+                    HStack {
+                        Text("Preferred Density")
+                        Spacer()
+                        Text(String(format: "%.1f g/L", settings.preferredDensity))
+                            .foregroundColor(settings.preferredDensity > 6.2 ? .red : .primary)
+                            .fontWeight(.medium)
+                        Stepper("", value: $settings.preferredDensity, in: 3.0...8.0, step: 0.1)
+                            .labelsHidden()
+                    }
+
+                    if settings.preferredDensity > 6.2 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.red)
+                            Text("Density above 6.2 g/L raises CO\u{2082} retention risk")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                    }
+
+                    Toggle("Show Max Depth on Label", isOn: $settings.showDensityDepthOnLabel)
+                    Toggle("Show END on Label", isOn: $settings.showENDOnLabel)
+                    Toggle("O\u{2082} is Narcotic", isOn: $settings.oxygenIsNarcotic)
+                } header: {
+                    Text("Gas Density & END")
+                } footer: {
+                    Text("Max depth is where the mix reaches the preferred density. END is the equivalent narcotic depth at the shallower of the MOD and that depth. With O\u{2082} is Narcotic on, oxygen counts like nitrogen; off counts nitrogen only. Common guidance is 5.2 g/L preferred and 6.2 g/L maximum.")
                 }
 
                 // MARK: - Appearance Section
@@ -225,7 +268,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("1.1")
+                        Text(appVersion)
                             .foregroundColor(.secondary)
                     }
                 }
@@ -261,6 +304,14 @@ struct SettingsView: View {
                 updateHistoryCount()
             }
         }
+    }
+
+    /// Read from the bundle so it tracks MARKETING_VERSION / CURRENT_PROJECT_VERSION.
+    private var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(version) (\(build))"
     }
 
     private var deviceStatusColor: Color {
