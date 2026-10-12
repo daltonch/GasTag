@@ -26,8 +26,8 @@ enum WaterType: String, CaseIterable {
 ///
 /// Matches the Blender Toolkit (blender-toolkit.t-provider.de) so labels agree with
 /// what blenders check against: surface pressure is 1.01325 bar, depth adds
-/// 1 bar per `WaterType.metersPerBar`, gas densities are the 1 ata values below,
-/// and only nitrogen is treated as narcotic. All depths are in metres.
+/// 1 bar per `WaterType.metersPerBar`, and gas densities are the 1 ata values
+/// below. All depths are in metres.
 enum GasCalculations {
     static let surfacePressureBar = 1.01325
     static let feetPerMeter = 1.0 / 0.3048
@@ -77,12 +77,16 @@ enum GasCalculations {
         return max(0, depth)
     }
 
-    /// Equivalent narcotic depth at `depthMeters`, counting nitrogen only.
+    /// Equivalent narcotic depth at `depthMeters`. With `oxygenIsNarcotic` O2 counts
+    /// as fully narcotic (GUE / modern trimix convention), so the reference is all of
+    /// air; without it only nitrogen counts (the Blender Toolkit default).
     /// Clamped at 0: a mix less narcotic than air at the surface reads as surface.
-    static func endMeters(oxygenPercent: Double, heliumPercent: Double, depthMeters: Double, water: WaterType) -> Double {
-        let fn2 = max(0, 1.0 - oxygenPercent / 100.0 - heliumPercent / 100.0)
+    static func endMeters(oxygenPercent: Double, heliumPercent: Double, depthMeters: Double, water: WaterType, oxygenIsNarcotic: Bool) -> Double {
+        let fo2 = oxygenPercent / 100.0
+        let fn2 = max(0, 1.0 - fo2 - heliumPercent / 100.0)
+        let narcoticFraction = oxygenIsNarcotic ? fn2 + fo2 : fn2 / airNitrogenFraction
         let surfaceMeters = surfacePressureBar * water.metersPerBar
-        let end = fn2 / airNitrogenFraction * (depthMeters + surfaceMeters) - surfaceMeters
+        let end = narcoticFraction * (depthMeters + surfaceMeters) - surfaceMeters
         return max(0, end)
     }
 

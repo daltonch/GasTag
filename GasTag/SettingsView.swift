@@ -232,10 +232,11 @@ struct SettingsView: View {
 
                     Toggle("Show Max Depth on Label", isOn: $settings.showDensityDepthOnLabel)
                     Toggle("Show END on Label", isOn: $settings.showENDOnLabel)
+                    Toggle("O\u{2082} is Narcotic", isOn: $settings.oxygenIsNarcotic)
                 } header: {
                     Text("Gas Density & END")
                 } footer: {
-                    Text("Max depth is where the mix reaches the preferred density. END is the equivalent narcotic depth at that depth, counting nitrogen only. Common guidance is 5.2 g/L preferred and 6.2 g/L maximum.")
+                    Text("Max depth is where the mix reaches the preferred density. END is the equivalent narcotic depth at the shallower of the MOD and that depth. With O\u{2082} is Narcotic on, oxygen counts like nitrogen; off counts nitrogen only. Common guidance is 5.2 g/L preferred and 6.2 g/L maximum.")
                 }
 
                 // MARK: - Appearance Section

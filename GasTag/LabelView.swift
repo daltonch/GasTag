@@ -77,6 +77,10 @@ struct LabelView: View {
         UserSettings.shared.formattedEND(oxygenPercent: oxygen, heliumPercent: helium)
     }
 
+    private var endDepth: String {
+        UserSettings.shared.formattedENDDepth(oxygenPercent: oxygen, heliumPercent: helium)
+    }
+
     private var densityCaption: String {
         String(format: "%.1f g/L", UserSettings.shared.preferredDensity)
     }
@@ -117,14 +121,14 @@ struct LabelView: View {
             .padding(.vertical, 12)
             .background(isPPO2Warning ? Color.orange : Color.red)
 
-            // Density limit / END Row - optional, END is taken at the density depth
+            // Density limit / END Row - optional, END is taken at the shallower of MOD and density depth
             if showDensityDepth || showEND {
                 HStack(spacing: 0) {
                     if showDensityDepth {
                         limitColumn(caption: "MAX @ \(densityCaption)", value: densityDepth)
                     }
                     if showEND {
-                        limitColumn(caption: showDensityDepth ? "END" : "END @ \(densityCaption)", value: end)
+                        limitColumn(caption: "END @ \(endDepth)", value: end)
                     }
                 }
                 .padding(.vertical, 8)

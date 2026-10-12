@@ -65,6 +65,9 @@ class UserSettings: ObservableObject {
     @Published var showENDOnLabel: Bool = false {
         didSet { defaults.set(showENDOnLabel, forKey: "showENDOnLabel") }
     }
+    @Published var oxygenIsNarcotic: Bool = true {
+        didSet { defaults.set(oxygenIsNarcotic, forKey: "oxygenIsNarcotic") }
+    }
 
     var appearanceMode: AppearanceMode {
         get { AppearanceMode(rawValue: appearanceModeRaw) ?? .system }
@@ -94,6 +97,7 @@ class UserSettings: ObservableObject {
         if preferredDensity == 0 { preferredDensity = 5.2 }
         showDensityDepthOnLabel = defaults.bool(forKey: "showDensityDepthOnLabel")
         showENDOnLabel = defaults.bool(forKey: "showENDOnLabel")
+        oxygenIsNarcotic = defaults.object(forKey: "oxygenIsNarcotic") as? Bool ?? true
 
         // Load tank names from JSON
         if let data = defaults.data(forKey: "savedTankNames"),
@@ -169,15 +173,26 @@ class UserSettings: ObservableObject {
         ).map { GasCalculations.convert(meters: $0, to: depthUnit) }
     }
 
-    /// END at the preferred-density depth, in the user's depth unit.
-    func calculateEND(oxygenPercent: Double, heliumPercent: Double) -> Double? {
-        guard let depth = GasCalculations.densityLimitDepthMeters(
+    /// Deepest depth the mix may be used: the shallower of the MOD and the
+    /// preferred-density depth, in metres. END is evaluated here.
+    func endDepthMeters(oxygenPercent: Double, heliumPercent: Double) -> Double? {
+        let densityDepth = GasCalculations.densityLimitDepthMeters(
             oxygenPercent: oxygenPercent, heliumPercent: heliumPercent,
             densityLimit: preferredDensity, water: waterType
-        ) else { return nil }
+        )
+        let mod = GasCalculations.modMeters(oxygenPercent: oxygenPercent, ppo2: ppo2ForMOD, water: waterType)
+        switch (densityDepth, mod) {
+        case let (density?, mod?): return min(density, mod)
+        case let (density, mod): return density ?? mod
+        }
+    }
+
+    /// END at `endDepthMeters`, in the user's depth unit.
+    func calculateEND(oxygenPercent: Double, heliumPercent: Double) -> Double? {
+        guard let depth = endDepthMeters(oxygenPercent: oxygenPercent, heliumPercent: heliumPercent) else { return nil }
         let end = GasCalculations.endMeters(
             oxygenPercent: oxygenPercent, heliumPercent: heliumPercent,
-            depthMeters: depth, water: waterType
+            depthMeters: depth, water: waterType, oxygenIsNarcotic: oxygenIsNarcotic
         )
         return GasCalculations.convert(meters: end, to: depthUnit)
     }
@@ -186,6 +201,12 @@ class UserSettings: ObservableObject {
     func formattedDensityDepth(oxygenPercent: Double, heliumPercent: Double) -> String {
         guard let depth = calculateDensityDepth(oxygenPercent: oxygenPercent, heliumPercent: heliumPercent) else { return "--" }
         return String(format: "%.0f %@", depth.rounded(.down), depthUnit.rawValue)
+    }
+
+    func formattedENDDepth(oxygenPercent: Double, heliumPercent: Double) -> String {
+        guard let depth = endDepthMeters(oxygenPercent: oxygenPercent, heliumPercent: heliumPercent) else { return "--" }
+        let converted = GasCalculations.convert(meters: depth, to: depthUnit)
+        return String(format: "%.0f %@", converted.rounded(.down), depthUnit.rawValue)
     }
 
     func formattedEND(oxygenPercent: Double, heliumPercent: Double) -> String {
