@@ -1,4 +1,5 @@
 import XCTest
+import BRLMPrinterKit
 @testable import GasTag
 
 /// Records which search path `PrinterManager` used so tests can prove the
@@ -10,9 +11,14 @@ final class FakePrinterSearcher: @unchecked Sendable {
     private var _pairedCalls = 0
     private var _pickerCalls = 0
 
-    init(paired: [DiscoveredPrinter] = [], pickerResult: [DiscoveredPrinter] = []) {
+    /// When set, `searchPaired()` blocks until the gate is signalled so a test
+    /// can interleave `stopSearching()` with an in-flight search.
+    let gate: DispatchSemaphore?
+
+    init(paired: [DiscoveredPrinter] = [], pickerResult: [DiscoveredPrinter] = [], gate: DispatchSemaphore? = nil) {
         _paired = paired
         _pickerResult = pickerResult
+        self.gate = gate
     }
 
     var paired: [DiscoveredPrinter] {
@@ -24,7 +30,8 @@ final class FakePrinterSearcher: @unchecked Sendable {
 
     /// Stands in for `BRLMPrinterSearcher.startBluetoothSearch()`.
     func searchPaired() -> [DiscoveredPrinter] {
-        lock.withLock {
+        gate?.wait()
+        return lock.withLock {
             _pairedCalls += 1
             return _paired
         }
@@ -45,6 +52,11 @@ final class FakePrinterSearcher: @unchecked Sendable {
 /// paired in iOS Settings never appeared in the app. The app searched only
 /// through the iOS accessory picker, which lists unpaired accessories, instead
 /// of the SDK's paired-printer query.
+///
+/// These tests drive the real `PrinterManager` orchestration with the two SDK
+/// adapter closures faked. The adapters themselves
+/// (`PrinterManager.sdkPairedPrinterSearch` / `sdkAccessoryPairingSearch`)
+/// need a physical paired printer and are verified on-device, not here.
 @MainActor
 final class PrinterManagerSearchTests: XCTestCase {
 
@@ -90,14 +102,71 @@ final class PrinterManagerSearchTests: XCTestCase {
         XCTAssertEqual(manager.connectionState, .disconnected)
     }
 
-    func testRepeatedSearchDoesNotDuplicatePrinters() async {
+    /// Each search replaces the list, so a printer that was unpaired since the
+    /// last search disappears instead of lingering.
+    func testSearchReplacesPreviousResults() async {
         let searcher = FakePrinterSearcher(paired: [ql820, other])
         let manager = makeManager(searcher)
 
         await manager.refreshPairedPrinters()
-        await manager.refreshPairedPrinters()
-
         XCTAssertEqual(manager.discoveredPrinters, [ql820, other])
+
+        searcher.paired = [ql820]
+        await manager.refreshPairedPrinters()
+        XCTAssertEqual(manager.discoveredPrinters, [ql820])
+    }
+
+    func testMergeDeduplicatesBySerialAndKeepsOrder() {
+        let renamed = DiscoveredPrinter(id: ql820.id, name: "Renamed", serialNumber: ql820.serialNumber)
+        let merged = PrinterManager.merge([ql820], with: [renamed, other, other])
+        XCTAssertEqual(merged, [ql820, other])
+    }
+
+    /// Stop was tapped while the SDK search was still running: the late result
+    /// must not overwrite the stopped state, but the list may still be filled.
+    func testStopDuringSearchIsNotOverwrittenByLateResult() async {
+        settings.savePrinter(identifier: ql820.serialNumber, name: ql820.name)
+        let gate = DispatchSemaphore(value: 0)
+        let searcher = FakePrinterSearcher(paired: [ql820], gate: gate)
+        let manager = makeManager(searcher)
+
+        let search = Task { await manager.refreshPairedPrinters() }
+        while manager.connectionState != .searching { await Task.yield() }
+
+        manager.stopSearching()
+        XCTAssertEqual(manager.connectionState, .unavailable)
+
+        gate.signal()
+        await search.value
+
+        XCTAssertEqual(manager.connectionState, .unavailable, "Late result must not flip a stopped search to .connected")
+        XCTAssertEqual(manager.discoveredPrinters, [ql820])
+    }
+
+    func testStopDuringVerifyIsNotOverwrittenByLateResult() async {
+        settings.savePrinter(identifier: ql820.serialNumber, name: ql820.name)
+        let gate = DispatchSemaphore(value: 0)
+        let searcher = FakePrinterSearcher(paired: [ql820], gate: gate)
+        let manager = makeManager(searcher)
+
+        let verify = Task { await manager.verifySavedPrinter() }
+        while manager.connectionState != .searching { await Task.yield() }
+
+        manager.stopSearching()
+        gate.signal()
+        await verify.value
+
+        XCTAssertEqual(manager.connectionState, .unavailable)
+    }
+
+    // MARK: - SDK channel mapping
+
+    func testDiscoveredPrinterFromBluetoothChannelUsesSerialNumber() {
+        let channel = BRLMChannel(bluetoothSerialNumber: "QL820-SERIAL")
+        let printer = DiscoveredPrinter(channel: channel)
+        XCTAssertEqual(printer.serialNumber, "QL820-SERIAL")
+        XCTAssertEqual(printer.id, "QL820-SERIAL")
+        XCTAssertEqual(printer.name, "Brother Printer", "Falls back when the channel carries no model name")
     }
 
     func testSearchWithSavedPrinterMissingEndsUnavailable() async {

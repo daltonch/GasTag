@@ -145,7 +145,8 @@ class PrinterManager: ObservableObject {
 
         let picked = await accessoryPairingSearch()
 
-        guard connectionState == .searching else { return }
+        // Always re-list after the picker: the user's pick must not be dropped
+        // just because something else touched the state while the picker was up.
         await refreshPairedPrinters()
         // Keep what the user just picked visible even if the pairing is still settling.
         discoveredPrinters = Self.merge(discoveredPrinters, with: picked)
