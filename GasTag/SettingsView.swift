@@ -225,7 +225,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("1.1")
+                        Text(appVersion)
                             .foregroundColor(.secondary)
                     }
                 }
@@ -261,6 +261,14 @@ struct SettingsView: View {
                 updateHistoryCount()
             }
         }
+    }
+
+    /// Read from the bundle so it tracks MARKETING_VERSION / CURRENT_PROJECT_VERSION.
+    private var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(version) (\(build))"
     }
 
     private var deviceStatusColor: Color {
