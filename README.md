@@ -32,9 +32,9 @@ Before setting up GasTag, you'll need the following hardware:
 
 ### iOS Device
 - iPhone with Bluetooth 5.0, iPhone 13 and 15 Pro were used in Testing, ESP32 can be powered via the iPhone 15 w/ USBC
-- iOS 13 or later
+- iOS 17 or later
 - Xcode 15+ (for building the app)
-- Android Studio or PlatformIO (for building and flashing the ESP32 Firmware)
+- PlatformIO (for building and flashing the ESP32 Firmware)
 
 ---
 
@@ -86,7 +86,7 @@ Install [PlatformIO](https://platformio.org/):
 Once flashed, the ESP32 will:
 - Advertise as **"GasTag Bridge"** over BLE
 - Wait for USB device connection
-- Auto-detect the Divesoft analyzer (VID: 0xA600, PID: 0xE212)
+- Open any USB CDC serial device that enumerates (the Divesoft analyzer's VID/PID are logged, not required)
 - Forward serial data as BLE notifications
 
 You can verify BLE advertising using the **nRF Connect** app on your phone before connecting with GasTag.
@@ -148,15 +148,13 @@ The GasTag iOS app displays gas readings, calculates MOD (Maximum Operating Dept
 
 1. **Power on the Brother QL-820NWB** and ensure Bluetooth is enabled on the printer
 
-2. **Open GasTag Settings** (gear icon in top-right)
+2. **Pair it in iOS Settings > Bluetooth** so it shows as Connected there. The app lists printers that are already paired with the phone.
 
-3. **Tap the printer status indicator** or go to **Printer > Search for Printers**
+3. **Open GasTag Settings** (gear icon in top-right) and tap **Printer > Connect Printer**, or tap the printer status indicator on the main screen
 
-4. **Wait for printer discovery** - the app searches for Brother printers via Bluetooth
+4. **Select your QL-820NWB** from the list. If it is not paired yet, **Pair New Printer…** opens the iOS accessory picker, which only lists unpaired printers.
 
-5. **Select your QL-820NWB** from the list
-
-6. The printer connection is saved and will auto-reconnect on future app launches
+5. The printer is saved and checked again on every app launch
 
 #### Printing Labels
 
@@ -183,7 +181,7 @@ The GasTag iOS app displays gas readings, calculates MOD (Maximum Operating Dept
 
 | Issue               | Solution                                                  |
 |---------------------|-----------------------------------------------------------|
-| Printer not found   | Ensure printer Bluetooth is on; restart printer           |
+| Printer not found   | Pair it in iOS Settings > Bluetooth first, then Search    |
 | "Wrong media" error | Load 62mm continuous roll (DK-2205 or DK-2251)            |
 | Print fails         | Check printer has labels loaded; restart printer          |
 | Connection timeout  | Move closer to printer; ensure no other devices connected |
@@ -198,6 +196,10 @@ The GasTag iOS app displays gas readings, calculates MOD (Maximum Operating Dept
 - **Raw Data Log:** Color-coded log of all received data
 - **Unit Preferences:** Temperature (F/C), Depth (ft/m)
 - **Auto-Reconnect:** Automatically reconnects to ESP32 if connection drops
+- **Print History:** Every printed label is saved and can be reprinted or shared
+- **Mix Label:** Optional second label with the gas mix, printed after the main label
+- **Firmware Updates:** Over-the-air ESP32 updates delivered from GitHub releases through the app
+- **Demo Mode:** Settings > Demo simulates readings without any hardware
 
 ---
 
@@ -205,12 +207,12 @@ The GasTag iOS app displays gas readings, calculates MOD (Maximum Operating Dept
 
 For developers modifying the system:
 
-| Parameter           | Value                                  |
-|---------------------|----------------------------------------|
-| Service UUID        | `A1B2C3D4-E5F6-7890-ABCD-EF1234567890` |
-| Characteristic UUID | `A1B2C3D5-E5F6-7890-ABCD-EF1234567890` |
-| Device Name         | `GasTag Bridge`                        |
-| Properties          | READ, NOTIFY                           |
-|---------------------|----------------------------------------|
+| Parameter                   | Value                                  | Properties   |
+|-----------------------------|----------------------------------------|--------------|
+| Service UUID                | `A1B2C3D4-E5F6-7890-ABCD-EF1234567890` |              |
+| Gas Data Characteristic     | `A1B2C3D5-E5F6-7890-ABCD-EF1234567890` | READ, NOTIFY |
+| Firmware Version            | `A1B2C3D6-E5F6-7890-ABCD-EF1234567890` | READ         |
+| OTA Control                 | `A1B2C3D7-E5F6-7890-ABCD-EF1234567890` | WRITE        |
+| Device Name                 | `GasTag Bridge`                        |              |
 
 Data is transmitted as UTF-8 encoded strings matching the gas analyzer output format.
