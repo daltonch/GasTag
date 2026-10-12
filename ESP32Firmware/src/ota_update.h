@@ -57,6 +57,16 @@ typedef enum {
 esp_err_t ota_init(void);
 
 /**
+ * Confirm the currently running firmware image so the bootloader will not
+ * roll it back. With CONFIG_APP_ROLLBACK_ENABLE a freshly installed OTA image
+ * boots in ESP_OTA_IMG_PENDING_VERIFY state and is reverted on the next reset
+ * unless the app marks it valid. Call once normal operation is up (BLE
+ * advertising and USB host running). No-op when the image is already valid
+ * or when running from the factory partition.
+ */
+void ota_confirm_running_image(void);
+
+/**
  * Start OTA update mode.
  * Stops BLE, starts WiFi SoftAP, and runs HTTP server.
  * This function blocks until update completes or times out.

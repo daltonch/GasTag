@@ -391,6 +391,34 @@ esp_err_t ota_init(void) {
     return ESP_OK;
 }
 
+void ota_confirm_running_image(void) {
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    if (running == NULL) {
+        ESP_LOGW(TAG, "Cannot determine running partition; skipping rollback confirmation");
+        return;
+    }
+
+    esp_ota_img_states_t state;
+    esp_err_t err = esp_ota_get_state_partition(running, &state);
+    if (err != ESP_OK) {
+        // Factory partition without otadata, or rollback disabled: nothing to confirm.
+        ESP_LOGI(TAG, "No OTA state for partition %s (%s); nothing to confirm",
+                 running->label, esp_err_to_name(err));
+        return;
+    }
+
+    if (state != ESP_OTA_IMG_PENDING_VERIFY) {
+        return;
+    }
+
+    err = esp_ota_mark_app_valid_cancel_rollback();
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Firmware image on %s confirmed valid; rollback cancelled", running->label);
+    } else {
+        ESP_LOGE(TAG, "Failed to confirm firmware image: %s", esp_err_to_name(err));
+    }
+}
+
 esp_err_t ota_start_update_mode(void) {
     ESP_LOGI(TAG, "Starting OTA update mode...");
 

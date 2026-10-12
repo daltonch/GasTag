@@ -586,6 +586,10 @@ void app_main(void) {
     // Start USB Host task on core 1
     xTaskCreatePinnedToCore(usb_host_task, "usb_host", 8192, NULL, 5, NULL, 1);
 
+    // BLE is advertising and the USB host task is running: this image works,
+    // so tell the bootloader not to roll back to the previous one.
+    ota_confirm_running_image();
+
     ESP_LOGI(TAG, "=== GasTag Bridge Ready ===");
 
     // Main loop - check for OTA mode request
