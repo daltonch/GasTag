@@ -22,46 +22,20 @@ struct HistoryView: View {
 
     var body: some View {
         NavigationView {
-            Group {
-                if labels.isEmpty {
-                    emptyState
-                } else {
-                    labelList
-                }
-            }
-            .navigationTitle("History")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if !labels.isEmpty {
-                        Button(isSelecting ? "Done" : "Select") {
-                            isSelecting.toggle()
-                            if !isSelecting {
-                                selectedLabels.removeAll()
-                            }
-                        }
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if !labels.isEmpty {
-                        Menu {
-                            Button {
-                                exportAll()
-                            } label: {
-                                Label("Export All", systemImage: "square.and.arrow.up")
-                            }
-                            if isSelecting && !selectedLabels.isEmpty {
-                                Button {
-                                    exportSelected()
-                                } label: {
-                                    Label("Export Selected (\(selectedLabels.count))", systemImage: "square.and.arrow.up")
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis.circle")
-                        }
+            VStack(spacing: 0) {
+                header
+
+                Group {
+                    if labels.isEmpty {
+                        emptyState
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        labelList
                     }
                 }
             }
+            .background(Color(.systemGroupedBackground))
+            .toolbar(.hidden, for: .navigationBar)
             .alert("Delete Label?", isPresented: $showingDeleteConfirmation) {
                 Button("Cancel", role: .cancel) {
                     labelToDelete = nil
@@ -90,6 +64,47 @@ struct HistoryView: View {
         }
     }
 
+    // Title and actions share one row to save vertical space, matching the main screen
+    private var header: some View {
+        HStack(spacing: 16) {
+            Text("History")
+                .font(.largeTitle.bold())
+            Spacer()
+            if !labels.isEmpty {
+                Button(isSelecting ? "Done" : "Select") {
+                    isSelecting.toggle()
+                    if !isSelecting {
+                        selectedLabels.removeAll()
+                    }
+                }
+                .fontWeight(isSelecting ? .semibold : .regular)
+
+                Menu {
+                    Button {
+                        exportAll()
+                    } label: {
+                        Label("Export All", systemImage: "square.and.arrow.up")
+                    }
+                    if isSelecting && !selectedLabels.isEmpty {
+                        Button {
+                            exportSelected()
+                        } label: {
+                            Label("Export Selected (\(selectedLabels.count))", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.title2)
+                        .frame(width: 44, height: 44)
+                        .background(Color(.secondarySystemGroupedBackground), in: Circle())
+                }
+                .accessibilityLabel("More")
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+    }
+
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "doc.text.magnifyingglass")
@@ -110,7 +125,8 @@ struct HistoryView: View {
                 if isSelecting {
                     selectableRow(for: label)
                 } else {
-                    NavigationLink(destination: HistoryDetailView(label: label)) {
+                    // The list hides the nav bar; the detail needs it back for its back button
+                    NavigationLink(destination: HistoryDetailView(label: label).toolbar(.visible, for: .navigationBar)) {
                         labelRow(for: label)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
