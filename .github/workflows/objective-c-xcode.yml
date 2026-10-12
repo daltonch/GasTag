@@ -23,7 +23,7 @@ jobs:
           xcodebuild clean build \
             -project GasTag.xcodeproj \
             -scheme GasTag \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
