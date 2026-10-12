@@ -218,6 +218,13 @@ struct MainView: View {
             } message: {
                 Text(printErrorMessage)
             }
+            .onAppear {
+                // Safe on every launch: this only queries printers already paired
+                // with the phone and never opens the iOS accessory picker.
+                if printerManager.connectionState == .disconnected && settings.hasSavedPrinter {
+                    printerManager.verifyConnection()
+                }
+            }
         }
     }
 

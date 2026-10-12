@@ -12,14 +12,33 @@ enum PrinterConnectionState: String {
     case error = "Error"
 }
 
-struct DiscoveredPrinter: Identifiable {
+struct DiscoveredPrinter: Identifiable, Equatable, Sendable {
     let id: String
     let name: String
     let serialNumber: String
 }
 
+extension DiscoveredPrinter {
+    /// Builds an entry from an SDK channel. For MFi (Bluetooth Classic) printers
+    /// `channelInfo` is the External Accessory serial number, which is what
+    /// `BRLMChannel(bluetoothSerialNumber:)` needs to open the printer later.
+    init(channel: BRLMChannel) {
+        let serial = channel.channelInfo
+        let model = channel.extraInfo?[BRLMChannelExtraInfoKeyModelName] as? String
+        self.init(id: serial, name: model ?? "Brother Printer", serialNumber: serial)
+    }
+}
+
 @MainActor
 class PrinterManager: ObservableObject {
+    /// Returns the Brother printers already paired with this iPhone. Shows no UI
+    /// and may block briefly, so it is always run off the main thread.
+    typealias PairedPrinterSearch = @Sendable () -> [DiscoveredPrinter]
+
+    /// Presents the iOS "Select An Accessory" picker so the user can pair a new
+    /// printer, and returns whatever they picked (empty on cancel).
+    typealias AccessoryPairingSearch = @MainActor () async -> [DiscoveredPrinter]
+
     static let shared = PrinterManager()
 
     @Published var connectionState: PrinterConnectionState = .disconnected
@@ -28,56 +47,114 @@ class PrinterManager: ObservableObject {
     @Published var connectedPrinterName: String?
 
     private var currentSerialNumber: String?
-    private let settings = UserSettings.shared
+    private let settings: UserSettings
+    private let pairedPrinterSearch: PairedPrinterSearch
+    private let accessoryPairingSearch: AccessoryPairingSearch
 
-    init() {
+    init(settings: UserSettings = .shared,
+         pairedPrinterSearch: @escaping PairedPrinterSearch = PrinterManager.sdkPairedPrinterSearch,
+         accessoryPairingSearch: @escaping AccessoryPairingSearch = PrinterManager.sdkAccessoryPairingSearch) {
+        self.settings = settings
+        self.pairedPrinterSearch = pairedPrinterSearch
+        self.accessoryPairingSearch = accessoryPairingSearch
+
         if settings.hasSavedPrinter {
             connectedPrinterName = settings.printerName
             currentSerialNumber = settings.printerIdentifier
-            // Don't set .connected - will be verified on app launch
+            // Don't set .connected - verifyConnection() proves it on app launch
         }
     }
 
-    // MARK: - Discovery
+    // MARK: - SDK search adapters
 
-    func startSearching() {
-        connectionState = .searching
-        discoveredPrinters = []
-        errorMessage = nil
+    /// Lists MFi printers that already show as paired in iOS Settings > Bluetooth.
+    /// This is the search Brother's discovery guide uses for Bluetooth printers.
+    nonisolated static let sdkPairedPrinterSearch: PairedPrinterSearch = {
+        BRLMPrinterSearcher.startBluetoothSearch().channels.map(DiscoveredPrinter.init(channel:))
+    }
 
-        // Use MFi Bluetooth search for Brother printers
-        BRLMPrinterSearcher.startBluetoothAccessorySearch { [weak self] result in
-            Task { @MainActor in
-                guard let self = self else { return }
-
-                for channel in result.channels {
-                        let name = channel.extraInfo?[BRLMChannelExtraInfoKeyModelName] as? String
-                            ?? "Brother Printer"
-                        let serialNumber = channel.channelInfo
-
-                        let printer = DiscoveredPrinter(
-                            id: serialNumber,
-                            name: name,
-                            serialNumber: serialNumber
-                        )
-
-                    if !self.discoveredPrinters.contains(where: { $0.id == printer.id }) {
-                        self.discoveredPrinters.append(printer)
-                    }
-                }
-
-                if self.connectionState == .searching {
-                    // If saved printer not found during search, mark as unavailable
-                    self.connectionState = self.settings.hasSavedPrinter ? .unavailable : .disconnected
-                }
+    /// Presents the iOS accessory picker. The picker only lists accessories that
+    /// are NOT yet paired, so a printer already "Connected" in Settings never
+    /// appears in it. It exists only for the explicit "Pair New Printer" path.
+    nonisolated static let sdkAccessoryPairingSearch: AccessoryPairingSearch = {
+        await withCheckedContinuation { continuation in
+            BRLMPrinterSearcher.startBluetoothAccessorySearch { result in
+                continuation.resume(returning: result.channels.map(DiscoveredPrinter.init(channel:)))
             }
         }
     }
 
+    // MARK: - Pure state mapping
+
+    /// State to show once a search finishes and a printer is saved.
+    nonisolated static func verificationState(found: [DiscoveredPrinter], savedSerial: String) -> PrinterConnectionState {
+        found.contains { $0.serialNumber == savedSerial } ? .connected : .unavailable
+    }
+
+    /// State to fall back to when a search is stopped before it reports.
+    nonisolated static func idleState(hasSavedPrinter: Bool) -> PrinterConnectionState {
+        hasSavedPrinter ? .unavailable : .disconnected
+    }
+
+    nonisolated static func endOfSearchState(found: [DiscoveredPrinter], savedSerial: String?) -> PrinterConnectionState {
+        guard let savedSerial else { return .disconnected }
+        return verificationState(found: found, savedSerial: savedSerial)
+    }
+
+    nonisolated static func merge(_ existing: [DiscoveredPrinter], with found: [DiscoveredPrinter]) -> [DiscoveredPrinter] {
+        var merged = existing
+        for printer in found where !merged.contains(where: { $0.id == printer.id }) {
+            merged.append(printer)
+        }
+        return merged
+    }
+
+    // MARK: - Discovery
+
+    /// Fire-and-forget entry point for SwiftUI. See `refreshPairedPrinters()`.
+    func startSearching() {
+        Task { await refreshPairedPrinters() }
+    }
+
+    /// Replaces `discoveredPrinters` with the printers already paired with this
+    /// iPhone. Shows no system UI.
+    func refreshPairedPrinters() async {
+        connectionState = .searching
+        errorMessage = nil
+
+        let search = pairedPrinterSearch
+        let found = await Task.detached(priority: .userInitiated) { search() }.value
+
+        discoveredPrinters = Self.merge([], with: found)
+
+        // The user may have tapped Stop while the search ran.
+        guard connectionState == .searching else { return }
+        connectionState = Self.endOfSearchState(found: found, savedSerial: settings.printerIdentifier)
+    }
+
+    /// Fire-and-forget entry point for SwiftUI. See `pairNewPrinter()`.
+    func startPairingNewPrinter() {
+        Task { await pairNewPrinter() }
+    }
+
+    /// Opens the iOS accessory picker to pair a printer that is not yet paired,
+    /// then re-lists paired printers so the new one shows up.
+    func pairNewPrinter() async {
+        connectionState = .searching
+        errorMessage = nil
+
+        let picked = await accessoryPairingSearch()
+
+        // Always re-list after the picker: the user's pick must not be dropped
+        // just because something else touched the state while the picker was up.
+        await refreshPairedPrinters()
+        // Keep what the user just picked visible even if the pairing is still settling.
+        discoveredPrinters = Self.merge(discoveredPrinters, with: picked)
+    }
+
     func stopSearching() {
         if connectionState == .searching {
-            // If we have a saved printer but stopped searching, mark as unavailable
-            connectionState = settings.hasSavedPrinter ? .unavailable : .disconnected
+            connectionState = Self.idleState(hasSavedPrinter: settings.hasSavedPrinter)
         }
     }
 
@@ -255,60 +332,32 @@ class PrinterManager: ObservableObject {
         }
     }
 
-    // MARK: - Reconnect
-
-    func reconnectIfNeeded() {
-        guard settings.hasSavedPrinter,
-              currentSerialNumber == nil else { return }
-
-        currentSerialNumber = settings.printerIdentifier
-        connectedPrinterName = settings.printerName
-        connectionState = .connected
-    }
-
     // MARK: - Connection Verification
 
+    /// Fire-and-forget entry point for SwiftUI. See `verifySavedPrinter()`.
     func verifyConnection() {
+        Task { await verifySavedPrinter() }
+    }
+
+    /// Checks whether the saved printer is still paired with this iPhone and
+    /// sets `.connected` or `.unavailable`. Shows no system UI, so it is safe
+    /// to call on every app launch.
+    func verifySavedPrinter() async {
         guard settings.hasSavedPrinter,
               let serialNumber = settings.printerIdentifier else {
             connectionState = .disconnected
             return
         }
 
-        // Set searching state while we look for the printer
         connectionState = .searching
         connectedPrinterName = settings.printerName
         currentSerialNumber = serialNumber
 
-        // Scan for the saved printer
-        BRLMPrinterSearcher.startBluetoothAccessorySearch { [weak self] result in
-            Task { @MainActor in
-                guard let self = self else { return }
+        let search = pairedPrinterSearch
+        let found = await Task.detached(priority: .userInitiated) { search() }.value
 
-                // Only update state if we're still searching (not timed out)
-                guard self.connectionState == .searching else { return }
-
-                // Check if our saved printer is in the results
-                let foundPrinter = result.channels.contains { channel in
-                    channel.channelInfo == serialNumber
-                }
-
-                if foundPrinter {
-                    self.connectionState = .connected
-                } else {
-                    self.connectionState = .unavailable
-                }
-            }
-        }
-
-        // Timeout after 5 seconds if no response
-        Task {
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            await MainActor.run {
-                if self.connectionState == .searching {
-                    self.connectionState = .unavailable
-                }
-            }
-        }
+        // Only update state if we're still searching (user may have stopped or reconnected)
+        guard connectionState == .searching else { return }
+        connectionState = Self.verificationState(found: found, savedSerial: serialNumber)
     }
 }

@@ -331,15 +331,26 @@ struct PrinterSearchView: View {
                         Image(systemName: "printer.dotmatrix")
                             .font(.largeTitle)
                             .foregroundColor(.secondary)
-                        Text("No printers found")
+                        Text("No paired printers found")
                             .foregroundColor(.secondary)
-                        Text("Make sure your Brother QL-820NWB is powered on and Bluetooth is enabled.")
+                        Text("Turn on your Brother QL-820NWB. If it is already paired in iOS Settings > Bluetooth, tap Search. Otherwise use Pair New Printer below.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 40)
+                }
+
+                Section {
+                    Button {
+                        printerManager.startPairingNewPrinter()
+                    } label: {
+                        Label("Pair New Printer…", systemImage: "plus.circle")
+                    }
+                    .disabled(printerManager.connectionState == .searching)
+                } footer: {
+                    Text("Only shows printers not yet paired. Already-paired printers appear above.")
                 }
 
                 if let error = printerManager.errorMessage {

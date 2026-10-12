@@ -25,6 +25,7 @@
 		B1000003 /* HistoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000013 /* HistoryDetailView.swift */; };
 		B1000004 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000014 /* HistoryView.swift */; };
 		B7C94D3736172587A10629E7 /* FirmwareSizeValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3ACCB46F71FBA26F018994D /* FirmwareSizeValidationTests.swift */; };
+		C4F1E2D3A5B6978001234568 /* PrinterManagerSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4F1E2D3A5B6978001234567 /* PrinterManagerSearchTests.swift */; };
 		C1000001 /* ESP32WiFiManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000011 /* ESP32WiFiManager.swift */; };
 		C1000002 /* FirmwareUpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000012 /* FirmwareUpdateManager.swift */; };
 		C1000003 /* FirmwareUpdateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000013 /* FirmwareUpdateView.swift */; };
@@ -70,6 +71,7 @@
 		A1000016 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A30206239CFBF7A5A0D93899 /* SemVerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SemVerTests.swift; sourceTree = "<group>"; };
 		A3ACCB46F71FBA26F018994D /* FirmwareSizeValidationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FirmwareSizeValidationTests.swift; sourceTree = "<group>"; };
+		C4F1E2D3A5B6978001234567 /* PrinterManagerSearchTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PrinterManagerSearchTests.swift; sourceTree = "<group>"; };
 		B1000011 /* PrintedLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintedLabel.swift; sourceTree = "<group>"; };
 		B1000012 /* HistoryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryManager.swift; sourceTree = "<group>"; };
 		B1000013 /* HistoryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryDetailView.swift; sourceTree = "<group>"; };
@@ -116,6 +118,7 @@
 			children = (
 				A30206239CFBF7A5A0D93899 /* SemVerTests.swift */,
 				A3ACCB46F71FBA26F018994D /* FirmwareSizeValidationTests.swift */,
+				C4F1E2D3A5B6978001234567 /* PrinterManagerSearchTests.swift */,
 			);
 			name = GasTagTests;
 			path = GasTagTests;
@@ -272,6 +275,7 @@
 			files = (
 				48909F2B92B32F42FA383532 /* SemVerTests.swift in Sources */,
 				B7C94D3736172587A10629E7 /* FirmwareSizeValidationTests.swift in Sources */,
+				C4F1E2D3A5B6978001234568 /* PrinterManagerSearchTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -476,7 +480,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = GasTag/GasTag.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_TEAM = KQA3778FCP;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -491,7 +495,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.daltonch.GasTag;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -511,7 +515,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = GasTag/GasTag.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_TEAM = KQA3778FCP;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -526,7 +530,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.daltonch.GasTag;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
