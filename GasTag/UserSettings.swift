@@ -53,6 +53,18 @@ class UserSettings: ObservableObject {
     @Published var printMixLabel: Bool = false {
         didSet { defaults.set(printMixLabel, forKey: "printMixLabel") }
     }
+    @Published var waterTypeRaw: String = WaterType.fresh.rawValue {
+        didSet { defaults.set(waterTypeRaw, forKey: "waterType") }
+    }
+    @Published var preferredDensity: Double = 5.2 {
+        didSet { defaults.set(preferredDensity, forKey: "preferredDensity") }
+    }
+    @Published var showDensityDepthOnLabel: Bool = false {
+        didSet { defaults.set(showDensityDepthOnLabel, forKey: "showDensityDepthOnLabel") }
+    }
+    @Published var showENDOnLabel: Bool = false {
+        didSet { defaults.set(showENDOnLabel, forKey: "showENDOnLabel") }
+    }
 
     var appearanceMode: AppearanceMode {
         get { AppearanceMode(rawValue: appearanceModeRaw) ?? .system }
@@ -77,6 +89,11 @@ class UserSettings: ObservableObject {
         if ppo2ForMOD == 0 { ppo2ForMOD = 1.6 }
         appearanceModeRaw = defaults.string(forKey: "appearanceMode") ?? "System"
         printMixLabel = defaults.bool(forKey: "printMixLabel")
+        waterTypeRaw = defaults.string(forKey: "waterType") ?? WaterType.fresh.rawValue
+        preferredDensity = defaults.double(forKey: "preferredDensity")
+        if preferredDensity == 0 { preferredDensity = 5.2 }
+        showDensityDepthOnLabel = defaults.bool(forKey: "showDensityDepthOnLabel")
+        showENDOnLabel = defaults.bool(forKey: "showENDOnLabel")
 
         // Load tank names from JSON
         if let data = defaults.data(forKey: "savedTankNames"),
@@ -127,20 +144,53 @@ class UserSettings: ObservableObject {
         }
     }
 
+    var waterType: WaterType {
+        get { WaterType(rawValue: waterTypeRaw) ?? .fresh }
+        set { waterTypeRaw = newValue.rawValue }
+    }
+
     func calculateMOD(oxygenPercent: Double, ppo2: Double? = nil) -> Double {
-        guard oxygenPercent > 0 else { return 0 }
-        let effectivePPO2 = ppo2 ?? ppo2ForMOD
-        let fo2 = oxygenPercent / 100.0
-        let modFeet = ((effectivePPO2 / fo2) - 1) * 33
-        switch depthUnit {
-        case .feet: return modFeet
-        case .meters: return modFeet * 0.3048
-        }
+        guard let modMeters = GasCalculations.modMeters(
+            oxygenPercent: oxygenPercent, ppo2: ppo2 ?? ppo2ForMOD, water: waterType
+        ) else { return 0 }
+        return GasCalculations.convert(meters: modMeters, to: depthUnit)
     }
 
     func formattedMOD(oxygenPercent: Double) -> String {
         let mod = calculateMOD(oxygenPercent: oxygenPercent)
         return String(format: "%.0f %@", mod, depthUnit.rawValue)
+    }
+
+    /// Depth where the mix reaches `preferredDensity`, in the user's depth unit.
+    func calculateDensityDepth(oxygenPercent: Double, heliumPercent: Double) -> Double? {
+        GasCalculations.densityLimitDepthMeters(
+            oxygenPercent: oxygenPercent, heliumPercent: heliumPercent,
+            densityLimit: preferredDensity, water: waterType
+        ).map { GasCalculations.convert(meters: $0, to: depthUnit) }
+    }
+
+    /// END at the preferred-density depth, in the user's depth unit.
+    func calculateEND(oxygenPercent: Double, heliumPercent: Double) -> Double? {
+        guard let depth = GasCalculations.densityLimitDepthMeters(
+            oxygenPercent: oxygenPercent, heliumPercent: heliumPercent,
+            densityLimit: preferredDensity, water: waterType
+        ) else { return nil }
+        let end = GasCalculations.endMeters(
+            oxygenPercent: oxygenPercent, heliumPercent: heliumPercent,
+            depthMeters: depth, water: waterType
+        )
+        return GasCalculations.convert(meters: end, to: depthUnit)
+    }
+
+    // Round the density depth down and END up so the label errs conservative.
+    func formattedDensityDepth(oxygenPercent: Double, heliumPercent: Double) -> String {
+        guard let depth = calculateDensityDepth(oxygenPercent: oxygenPercent, heliumPercent: heliumPercent) else { return "--" }
+        return String(format: "%.0f %@", depth.rounded(.down), depthUnit.rawValue)
+    }
+
+    func formattedEND(oxygenPercent: Double, heliumPercent: Double) -> String {
+        guard let end = calculateEND(oxygenPercent: oxygenPercent, heliumPercent: heliumPercent) else { return "--" }
+        return String(format: "%.0f %@", end.rounded(.up), depthUnit.rawValue)
     }
 
     var isPPO2Warning: Bool {

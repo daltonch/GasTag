@@ -61,6 +61,38 @@ struct LabelView: View {
         UserSettings.shared.formattedTemperature(temperature)
     }
 
+    private var showDensityDepth: Bool {
+        UserSettings.shared.showDensityDepthOnLabel
+    }
+
+    private var showEND: Bool {
+        UserSettings.shared.showENDOnLabel
+    }
+
+    private var densityDepth: String {
+        UserSettings.shared.formattedDensityDepth(oxygenPercent: oxygen, heliumPercent: helium)
+    }
+
+    private var end: String {
+        UserSettings.shared.formattedEND(oxygenPercent: oxygen, heliumPercent: helium)
+    }
+
+    private var densityCaption: String {
+        String(format: "%.1f g/L", UserSettings.shared.preferredDensity)
+    }
+
+    private func limitColumn(caption: String, value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(caption)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.gray)
+            Text(value)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(.black)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // MOD Row - Red background, white text
@@ -84,6 +116,22 @@ struct LabelView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
             .background(isPPO2Warning ? Color.orange : Color.red)
+
+            // Density limit / END Row - optional, END is taken at the density depth
+            if showDensityDepth || showEND {
+                HStack(spacing: 0) {
+                    if showDensityDepth {
+                        limitColumn(caption: "MAX @ \(densityCaption)", value: densityDepth)
+                    }
+                    if showEND {
+                        limitColumn(caption: showDensityDepth ? "END" : "END @ \(densityCaption)", value: end)
+                    }
+                }
+                .padding(.vertical, 8)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(Color.black.opacity(0.2)).frame(height: 1)
+                }
+            }
 
             // He Row
             Text("He: \(formatValue(helium, isStale: heliumIsStale, suffix: "%"))")

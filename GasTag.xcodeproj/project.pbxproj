@@ -10,6 +10,8 @@
 		2A169F3A2EF1C77C00DC3F4E /* PrinterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A169F372EF1C77C00DC3F4E /* PrinterManager.swift */; };
 		2A169F3B2EF1C77C00DC3F4E /* LabelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A169F362EF1C77C00DC3F4E /* LabelView.swift */; };
 		2A169F3C2EF1C77C00DC3F4E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A169F382EF1C77C00DC3F4E /* SettingsView.swift */; };
+		D2000001 /* GasCalculations.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2000011 /* GasCalculations.swift */; };
+		D2000002 /* GasCalculationsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2000012 /* GasCalculationsTests.swift */; };
 		2A169F3D2EF1C77C00DC3F4E /* UserSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A169F392EF1C77C00DC3F4E /* UserSettings.swift */; };
 		2A169F3E2EF1C7B400DC3F4E /* BRLMPrinterKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2A169F342EF1C76300DC3F4E /* BRLMPrinterKit.xcframework */; };
 		2A169F3F2EF1C7B400DC3F4E /* BRLMPrinterKit.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2A169F342EF1C76300DC3F4E /* BRLMPrinterKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -61,6 +63,8 @@
 		2A169F362EF1C77C00DC3F4E /* LabelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabelView.swift; sourceTree = "<group>"; };
 		2A169F372EF1C77C00DC3F4E /* PrinterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrinterManager.swift; sourceTree = "<group>"; };
 		2A169F382EF1C77C00DC3F4E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		D2000011 /* GasCalculations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasCalculations.swift; sourceTree = "<group>"; };
+		D2000012 /* GasCalculationsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GasCalculationsTests.swift; sourceTree = "<group>"; };
 		2A169F392EF1C77C00DC3F4E /* UserSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSettings.swift; sourceTree = "<group>"; };
 		A1000010 /* GasTag.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GasTag.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000011 /* GasTagApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GasTagApp.swift; sourceTree = "<group>"; };
@@ -119,6 +123,7 @@
 				A30206239CFBF7A5A0D93899 /* SemVerTests.swift */,
 				A3ACCB46F71FBA26F018994D /* FirmwareSizeValidationTests.swift */,
 				C4F1E2D3A5B6978001234567 /* PrinterManagerSearchTests.swift */,
+				D2000012 /* GasCalculationsTests.swift */,
 			);
 			name = GasTagTests;
 			path = GasTagTests;
@@ -144,6 +149,7 @@
 				2A169F372EF1C77C00DC3F4E /* PrinterManager.swift */,
 				2A169F382EF1C77C00DC3F4E /* SettingsView.swift */,
 				2A169F392EF1C77C00DC3F4E /* UserSettings.swift */,
+				D2000011 /* GasCalculations.swift */,
 				A1000013 /* BluetoothManager.swift */,
 				B1000011 /* PrintedLabel.swift */,
 				B1000012 /* HistoryManager.swift */,
@@ -276,6 +282,7 @@
 				48909F2B92B32F42FA383532 /* SemVerTests.swift in Sources */,
 				B7C94D3736172587A10629E7 /* FirmwareSizeValidationTests.swift in Sources */,
 				C4F1E2D3A5B6978001234568 /* PrinterManagerSearchTests.swift in Sources */,
+				D2000002 /* GasCalculationsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -288,6 +295,7 @@
 				2A169F3B2EF1C77C00DC3F4E /* LabelView.swift in Sources */,
 				2A169F3C2EF1C77C00DC3F4E /* SettingsView.swift in Sources */,
 				2A169F3D2EF1C77C00DC3F4E /* UserSettings.swift in Sources */,
+				D2000001 /* GasCalculations.swift in Sources */,
 				A1000002 /* ContentView.swift in Sources */,
 				A1000003 /* BluetoothManager.swift in Sources */,
 				B1000001 /* PrintedLabel.swift in Sources */,
