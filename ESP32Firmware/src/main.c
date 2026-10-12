@@ -38,7 +38,7 @@
 static const char *TAG = "GasTag";
 
 // ============== FIRMWARE VERSION ==============
-#define FIRMWARE_VERSION "1.0.3"
+#define FIRMWARE_VERSION "1.0.5"
 
 // ============== USB DEVICE DETECTION ==============
 // No longer restricted to specific VID/PID - accepts any USB CDC device
