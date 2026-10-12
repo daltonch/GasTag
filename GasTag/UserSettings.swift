@@ -27,7 +27,7 @@ enum AppearanceMode: String, CaseIterable {
 class UserSettings: ObservableObject {
     static let shared = UserSettings()
 
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
 
     @Published var printerIdentifier: String? {
         didSet { defaults.set(printerIdentifier, forKey: "printerIdentifier") }
@@ -62,7 +62,11 @@ class UserSettings: ObservableObject {
     // Cached tank names - loaded once at init
     @Published var savedTankNames: [String] = ["Stage 1"]
 
-    init() {
+    /// `defaults` is injectable so tests can use an isolated suite instead of
+    /// writing into the app's real preferences.
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+
         // Load saved values from UserDefaults
         printerIdentifier = defaults.string(forKey: "printerIdentifier")
         printerName = defaults.string(forKey: "printerName")
