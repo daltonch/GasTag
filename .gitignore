@@ -10,3 +10,6 @@ xcuserdata/
 
 # Python version manager
 .python-version
+
+# Xcode Cloud local state
+GasTag.xcodeproj/xcshareddata/xcodecloud/
